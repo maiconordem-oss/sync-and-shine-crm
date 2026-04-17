@@ -93,12 +93,12 @@ async function executeAction(
         description: p.description ? renderTemplate(String(p.description), ctx) : null,
         project_id: (p.project_id as string) || (ctx.task as { project_id?: string } | null)?.project_id || null,
         assignee_id: (p.assignee_id as string) || null,
-        priority: (p.priority as string) || "medium",
-        status: "new",
+        priority: ((p.priority as string) || "medium") as "low" | "medium" | "high" | "urgent",
+        status: "new" as const,
         due_date: dueDays ? addDays(new Date(), dueDays).toISOString() : null,
         created_by: ctx.userId,
       };
-      const { data, error } = await supabase.from("tasks").insert(newTask).select().single();
+      const { data, error } = await supabase.from("tasks").insert([newTask]).select().single();
       if (error) throw error;
       return data;
     }
@@ -118,7 +118,7 @@ async function executeAction(
       if (!taskId) return null;
       const { error } = await supabase
         .from("tasks")
-        .update({ status: p.status as string })
+        .update({ status: p.status as "new" | "in_progress" | "waiting" | "done" | "deferred" })
         .eq("id", taskId);
       if (error) throw error;
       return { ok: true };
@@ -220,13 +220,13 @@ export async function runAutomations(ctx: TriggerContext, depth = 0): Promise<vo
       runStatus = "error";
       errorMsg = e instanceof Error ? e.message : String(e);
     }
-    await supabase.from("automation_runs").insert({
+    await supabase.from("automation_runs").insert([{
       automation_id: auto.id,
       status: runStatus,
       trigger_payload: ctx as unknown as Record<string, unknown>,
       result: { actions: results } as unknown as Record<string, unknown>,
       error: errorMsg,
-    });
+    }]);
     await supabase
       .from("automations")
       .update({ run_count: (auto.run_count ?? 0) + 1, last_run_at: new Date().toISOString() })
