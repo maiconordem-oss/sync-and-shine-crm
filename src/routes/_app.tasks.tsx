@@ -95,7 +95,7 @@ function TasksPage() {
     if (!task || task.status === newStatus) return;
     const previousStatus = task.status;
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
-    const update: Record<string, unknown> = { status: newStatus };
+    const update: { status: TaskRow["status"]; completed_at?: string } = { status: newStatus };
     if (newStatus === "done") update.completed_at = new Date().toISOString();
     const { error } = await supabase.from("tasks").update(update).eq("id", taskId);
     if (error) {
