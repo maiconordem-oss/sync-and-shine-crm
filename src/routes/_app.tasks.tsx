@@ -272,7 +272,7 @@ function TasksPage() {
 function KanbanColumn({
   status, tasks, profileById, projectById,
 }: {
-  status: keyof typeof STATUS_LABEL;
+  status: TaskStatus;
   tasks: TaskRow[];
   profileById: (id: string | null) => ProfileLite | undefined;
   projectById: (id: string | null) => ProjectLite | undefined;
