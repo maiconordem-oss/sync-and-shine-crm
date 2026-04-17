@@ -29,11 +29,14 @@ export const Route = createFileRoute("/_app/tasks")({
   component: TasksPage,
 });
 
+type TaskStatus = "new" | "in_progress" | "waiting" | "done" | "deferred";
+type TaskPriority = "low" | "medium" | "high" | "urgent";
+
 interface TaskRow {
   id: string;
   title: string;
-  status: keyof typeof STATUS_LABEL;
-  priority: keyof typeof PRIORITY_COLOR;
+  status: TaskStatus;
+  priority: TaskPriority;
   assignee_id: string | null;
   project_id: string | null;
   due_date: string | null;
