@@ -223,8 +223,10 @@ export async function runAutomations(ctx: TriggerContext, depth = 0): Promise<vo
     await supabase.from("automation_runs").insert([{
       automation_id: auto.id,
       status: runStatus,
-      trigger_payload: ctx as unknown as Record<string, unknown>,
-      result: { actions: results } as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      trigger_payload: ctx as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result: { actions: results } as any,
       error: errorMsg,
     }]);
     await supabase
