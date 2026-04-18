@@ -45,7 +45,7 @@ interface TaskRow {
   position: number;
 }
 
-interface ProfileLite { id: string; full_name: string | null }
+interface ProfileLite { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }
 interface ProjectLite { id: string; name: string; color: string | null }
 
 function TasksPage() {
@@ -63,7 +63,7 @@ function TasksPage() {
   const load = async () => {
     const [t, p, pr] = await Promise.all([
       supabase.from("tasks").select("*").is("parent_task_id", null).order("position"),
-      supabase.from("profiles").select("id,full_name"),
+      supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name,color").eq("archived", false),
     ]);
     setTasks((t.data ?? []) as TaskRow[]);
