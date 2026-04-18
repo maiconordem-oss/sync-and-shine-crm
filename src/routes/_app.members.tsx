@@ -23,7 +23,7 @@ function MembersPage() {
 
   const load = async () => {
     const [m, r] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,email,job_title"),
+      supabase.from("profiles").select("id,full_name,email,job_title,contract_type"),
       supabase.from("user_roles").select("user_id,role"),
     ]);
     setMembers((m.data ?? []) as Member[]);
@@ -39,6 +39,14 @@ function MembersPage() {
     const { error } = await supabase.from("user_roles").insert([{ user_id: userId, role }]);
     if (error) { toast.error(error.message); return; }
     toast.success("Papel atualizado!");
+    void load();
+  };
+
+  const setContract = async (userId: string, contract_type: "clt" | "pj") => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from("profiles").update({ contract_type }).eq("id", userId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Tipo de contrato atualizado!");
     void load();
   };
 
