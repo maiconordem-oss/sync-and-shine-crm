@@ -134,6 +134,28 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
               <Label>Prazo</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Tipo de tarefa</Label>
+              <Select value={taskType} onValueChange={(v) => setTaskType(v as typeof taskType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Interna (CLT)</SelectItem>
+                  <SelectItem value="external">Externa (PJ — remunerada)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {taskType === "external" && (
+              <div className="space-y-1.5 col-span-2">
+                <Label>Valor do serviço (R$)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={serviceValue}
+                  onChange={(e) => setServiceValue(e.target.value)}
+                  placeholder="Ex: 50.00 — gera pagamento ao concluir"
+                />
+                <p className="text-xs text-muted-foreground">Ao concluir a tarefa, será criado um pagamento pendente para o responsável.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
