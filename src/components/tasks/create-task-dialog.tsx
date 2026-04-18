@@ -53,6 +53,8 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
       due_date: dueDate ? new Date(dueDate).toISOString() : null,
       created_by: user.id,
       parent_task_id: parentTaskId ?? null,
+      task_type: taskType,
+      service_value: taskType === "external" && serviceValue ? Number(serviceValue) : null,
     };
     const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
     setBusy(false);
