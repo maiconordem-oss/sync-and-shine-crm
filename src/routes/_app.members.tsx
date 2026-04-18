@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/members")({
   component: MembersPage,
 });
 
-interface Member { id: string; full_name: string | null; email: string | null; job_title: string | null }
+interface Member { id: string; full_name: string | null; email: string | null; job_title: string | null; contract_type: "clt" | "pj" }
 type Role = "admin" | "manager" | "member";
 
 function MembersPage() {
