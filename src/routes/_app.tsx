@@ -56,15 +56,18 @@ function AppLayout() {
       .then(({ count }) => setUnread(count ?? 0));
   }, [user, location.pathname]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      navigate({ to: "/auth" });
+    }
+  }, [loading, isAuthenticated, navigate]);
+
+  if (loading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Carregando...
       </div>
     );
-  }
-  if (!isAuthenticated) {
-    throw redirect({ to: "/auth" });
   }
 
   const visibleNav = NAV.filter((n) => {
