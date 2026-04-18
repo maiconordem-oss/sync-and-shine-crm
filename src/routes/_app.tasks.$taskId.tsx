@@ -36,6 +36,8 @@ interface TaskFull {
   tags: string[] | null;
   parent_task_id: string | null;
   completed_at: string | null;
+  task_type: "internal" | "external";
+  service_value: number | null;
 }
 
 export const Route = createFileRoute("/_app/tasks/$taskId")({
@@ -60,7 +62,7 @@ function TaskDetailPage() {
   const load = async () => {
     const [t, p, pr, sub, c, ch, te] = await Promise.all([
       supabase.from("tasks").select("*").eq("id", taskId).maybeSingle(),
-      supabase.from("profiles").select("id,full_name"),
+      supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name"),
       supabase.from("tasks").select("*").eq("parent_task_id", taskId),
       supabase.from("comments").select("*").eq("task_id", taskId).order("created_at"),
