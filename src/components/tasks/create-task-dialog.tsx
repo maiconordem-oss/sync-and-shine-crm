@@ -15,7 +15,7 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   projects: { id: string; name: string }[];
-  profiles: { id: string; full_name: string | null }[];
+  profiles: { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[];
   parentTaskId?: string;
   defaultProjectId?: string;
   onCreated?: () => void;
