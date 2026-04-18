@@ -259,6 +259,7 @@ function TaskDetailPage() {
           <TaskAttachments taskId={taskId} />
 
           <Card>
+            <CardHeader><CardTitle className="text-base">Comentários</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {comments.map((c) => {
                 const author = profileById(c.author_id);
