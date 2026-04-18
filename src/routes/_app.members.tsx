@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_app/members")({
   component: MembersPage,
 });
 
-interface Member { id: string; full_name: string | null; email: string | null; job_title: string | null }
+interface Member { id: string; full_name: string | null; email: string | null; job_title: string | null; contract_type: "clt" | "pj" }
 type Role = "admin" | "manager" | "member";
 
 function MembersPage() {
@@ -23,7 +23,7 @@ function MembersPage() {
 
   const load = async () => {
     const [m, r] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,email,job_title"),
+      supabase.from("profiles").select("id,full_name,email,job_title,contract_type"),
       supabase.from("user_roles").select("user_id,role"),
     ]);
     setMembers((m.data ?? []) as Member[]);
@@ -42,6 +42,14 @@ function MembersPage() {
     void load();
   };
 
+  const setContract = async (userId: string, contract_type: "clt" | "pj") => {
+    if (!isAdmin) return;
+    const { error } = await supabase.from("profiles").update({ contract_type }).eq("id", userId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Tipo de contrato atualizado!");
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -57,6 +65,7 @@ function MembersPage() {
                 <th className="p-3 font-medium">Usuário</th>
                 <th className="p-3 font-medium">E-mail</th>
                 <th className="p-3 font-medium">Cargo</th>
+                <th className="p-3 font-medium">Contrato</th>
                 <th className="p-3 font-medium">Papel</th>
               </tr>
             </thead>
@@ -71,6 +80,19 @@ function MembersPage() {
                   </td>
                   <td className="p-3 text-muted-foreground">{m.email}</td>
                   <td className="p-3 text-muted-foreground">{m.job_title ?? "—"}</td>
+                  <td className="p-3">
+                    {isAdmin ? (
+                      <Select value={m.contract_type ?? "clt"} onValueChange={(v) => void setContract(m.id, v as "clt" | "pj")}>
+                        <SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="clt">CLT</SelectItem>
+                          <SelectItem value="pj">PJ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="uppercase">{m.contract_type ?? "clt"}</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     {isAdmin ? (
                       <Select value={roles[m.id] ?? "member"} onValueChange={(v) => void setRole(m.id, v as Role)}>

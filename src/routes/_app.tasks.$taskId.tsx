@@ -36,6 +36,8 @@ interface TaskFull {
   tags: string[] | null;
   parent_task_id: string | null;
   completed_at: string | null;
+  task_type: "internal" | "external";
+  service_value: number | null;
 }
 
 export const Route = createFileRoute("/_app/tasks/$taskId")({
@@ -46,7 +48,7 @@ function TaskDetailPage() {
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
   const { user, profile } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
-  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [subtasks, setSubtasks] = useState<TaskFull[]>([]);
   const [comments, setComments] = useState<{ id: string; content: string; author_id: string | null; created_at: string }[]>([]);
@@ -60,7 +62,7 @@ function TaskDetailPage() {
   const load = async () => {
     const [t, p, pr, sub, c, ch, te] = await Promise.all([
       supabase.from("tasks").select("*").eq("id", taskId).maybeSingle(),
-      supabase.from("profiles").select("id,full_name"),
+      supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name"),
       supabase.from("tasks").select("*").eq("parent_task_id", taskId),
       supabase.from("comments").select("*").eq("task_id", taskId).order("created_at"),
@@ -68,7 +70,7 @@ function TaskDetailPage() {
       supabase.from("time_entries").select("*").eq("task_id", taskId).order("started_at", { ascending: false }),
     ]);
     setTask((t.data as TaskFull) ?? null);
-    setProfiles((p.data ?? []) as { id: string; full_name: string | null }[]);
+    setProfiles((p.data ?? []) as { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]);
     setProjects((pr.data ?? []) as { id: string; name: string }[]);
     setSubtasks((sub.data ?? []) as TaskFull[]);
     setComments((c.data ?? []) as { id: string; content: string; author_id: string | null; created_at: string }[]);
@@ -311,14 +313,45 @@ function TaskDetailPage() {
                 </Select>
               </Field>
               <Field label="Responsável">
-                <Select value={task.assignee_id ?? "none"} onValueChange={(v) => void update({ assignee_id: v === "none" ? null : v })}>
+                <Select value={task.assignee_id ?? "none"} onValueChange={(v) => {
+                  const newId = v === "none" ? null : v;
+                  const p = profiles.find((x) => x.id === newId);
+                  const patch: Partial<TaskFull> = { assignee_id: newId };
+                  if (p?.contract_type === "pj" && task.task_type !== "external") patch.task_type = "external";
+                  if (p?.contract_type === "clt" && task.task_type !== "internal") patch.task_type = "internal";
+                  void update(patch);
+                }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
-                    {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}</SelectItem>)}
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name ?? "—"}{p.contract_type === "pj" ? " (PJ)" : ""}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>
+              <Field label="Tipo">
+                <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Interna (CLT)</SelectItem>
+                    <SelectItem value="external">Externa (PJ)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              {task.task_type === "external" && (
+                <Field label="Valor do serviço (R$)">
+                  <Input
+                    type="number" step="0.01" min="0"
+                    value={task.service_value ?? ""}
+                    onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
+                    onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })}
+                    placeholder="Gera pagamento ao concluir"
+                  />
+                </Field>
+              )}
               <Field label="Projeto">
                 <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>

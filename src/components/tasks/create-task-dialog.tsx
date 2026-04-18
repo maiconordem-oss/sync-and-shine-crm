@@ -15,7 +15,7 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   projects: { id: string; name: string }[];
-  profiles: { id: string; full_name: string | null }[];
+  profiles: { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[];
   parentTaskId?: string;
   defaultProjectId?: string;
   onCreated?: () => void;
@@ -29,11 +29,14 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const [assigneeId, setAssigneeId] = useState<string>("none");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [dueDate, setDueDate] = useState("");
+  const [taskType, setTaskType] = useState<"internal" | "external">("internal");
+  const [serviceValue, setServiceValue] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   const reset = () => {
     setTitle(""); setDescription(""); setAssigneeId("none");
     setProjectId(defaultProjectId ?? "none"); setPriority("medium"); setDueDate("");
+    setTaskType("internal"); setServiceValue("");
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -50,6 +53,8 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
       due_date: dueDate ? new Date(dueDate).toISOString() : null,
       created_by: user.id,
       parent_task_id: parentTaskId ?? null,
+      task_type: taskType,
+      service_value: taskType === "external" && serviceValue ? Number(serviceValue) : null,
     };
     const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
     setBusy(false);
@@ -97,11 +102,20 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
             </div>
             <div className="space-y-1.5">
               <Label>Responsável</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <Select value={assigneeId} onValueChange={(v) => {
+                setAssigneeId(v);
+                const p = profiles.find((x) => x.id === v);
+                if (p?.contract_type === "pj") setTaskType("external");
+                else if (p?.contract_type === "clt") setTaskType("internal");
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem responsável</SelectItem>
-                  {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}</SelectItem>)}
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name ?? "—"}{p.contract_type === "pj" ? " (PJ)" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -120,6 +134,28 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
               <Label>Prazo</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Tipo de tarefa</Label>
+              <Select value={taskType} onValueChange={(v) => setTaskType(v as typeof taskType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Interna (CLT)</SelectItem>
+                  <SelectItem value="external">Externa (PJ — remunerada)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {taskType === "external" && (
+              <div className="space-y-1.5 col-span-2">
+                <Label>Valor do serviço (R$)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  value={serviceValue}
+                  onChange={(e) => setServiceValue(e.target.value)}
+                  placeholder="Ex: 50.00 — gera pagamento ao concluir"
+                />
+                <p className="text-xs text-muted-foreground">Ao concluir a tarefa, será criado um pagamento pendente para o responsável.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>

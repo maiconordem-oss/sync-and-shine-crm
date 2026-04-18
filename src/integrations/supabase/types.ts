@@ -318,6 +318,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          contract_type: Database["public"]["Enums"]["contract_type"]
           created_at: string
           email: string | null
           full_name: string | null
@@ -327,6 +328,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -336,6 +338,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -428,9 +431,11 @@ export type Database = {
           position: number
           priority: Database["public"]["Enums"]["task_priority"]
           project_id: string | null
+          service_value: number | null
           start_date: string | null
           status: Database["public"]["Enums"]["task_status"]
           tags: string[] | null
+          task_type: Database["public"]["Enums"]["task_type"]
           title: string
           updated_at: string
         }
@@ -447,9 +452,11 @@ export type Database = {
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
+          service_value?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[] | null
+          task_type?: Database["public"]["Enums"]["task_type"]
           title: string
           updated_at?: string
         }
@@ -466,9 +473,11 @@ export type Database = {
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
+          service_value?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           tags?: string[] | null
+          task_type?: Database["public"]["Enums"]["task_type"]
           title?: string
           updated_at?: string
         }
@@ -567,6 +576,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "member"
+      contract_type: "clt" | "pj"
       notification_type:
         | "assigned"
         | "mentioned"
@@ -578,6 +588,7 @@ export type Database = {
       payment_status: "pending" | "paid" | "cancelled"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "new" | "in_progress" | "waiting" | "done" | "deferred"
+      task_type: "internal" | "external"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -706,6 +717,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "member"],
+      contract_type: ["clt", "pj"],
       notification_type: [
         "assigned",
         "mentioned",
@@ -718,6 +730,7 @@ export const Constants = {
       payment_status: ["pending", "paid", "cancelled"],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["new", "in_progress", "waiting", "done", "deferred"],
+      task_type: ["internal", "external"],
     },
   },
 } as const
