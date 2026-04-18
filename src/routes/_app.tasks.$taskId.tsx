@@ -48,7 +48,7 @@ function TaskDetailPage() {
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
   const { user, profile } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
-  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [subtasks, setSubtasks] = useState<TaskFull[]>([]);
   const [comments, setComments] = useState<{ id: string; content: string; author_id: string | null; created_at: string }[]>([]);
@@ -70,7 +70,7 @@ function TaskDetailPage() {
       supabase.from("time_entries").select("*").eq("task_id", taskId).order("started_at", { ascending: false }),
     ]);
     setTask((t.data as TaskFull) ?? null);
-    setProfiles((p.data ?? []) as { id: string; full_name: string | null }[]);
+    setProfiles((p.data ?? []) as { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]);
     setProjects((pr.data ?? []) as { id: string; name: string }[]);
     setSubtasks((sub.data ?? []) as TaskFull[]);
     setComments((c.data ?? []) as { id: string; content: string; author_id: string | null; created_at: string }[]);
