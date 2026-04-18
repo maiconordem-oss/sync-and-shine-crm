@@ -65,6 +65,7 @@ function MembersPage() {
                 <th className="p-3 font-medium">Usuário</th>
                 <th className="p-3 font-medium">E-mail</th>
                 <th className="p-3 font-medium">Cargo</th>
+                <th className="p-3 font-medium">Contrato</th>
                 <th className="p-3 font-medium">Papel</th>
               </tr>
             </thead>
@@ -79,6 +80,19 @@ function MembersPage() {
                   </td>
                   <td className="p-3 text-muted-foreground">{m.email}</td>
                   <td className="p-3 text-muted-foreground">{m.job_title ?? "—"}</td>
+                  <td className="p-3">
+                    {isAdmin ? (
+                      <Select value={m.contract_type ?? "clt"} onValueChange={(v) => void setContract(m.id, v as "clt" | "pj")}>
+                        <SelectTrigger className="h-8 w-[110px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="clt">CLT</SelectItem>
+                          <SelectItem value="pj">PJ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="uppercase">{m.contract_type ?? "clt"}</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     {isAdmin ? (
                       <Select value={roles[m.id] ?? "member"} onValueChange={(v) => void setRole(m.id, v as Role)}>
