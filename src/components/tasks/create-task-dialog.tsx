@@ -102,11 +102,20 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
             </div>
             <div className="space-y-1.5">
               <Label>Responsável</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <Select value={assigneeId} onValueChange={(v) => {
+                setAssigneeId(v);
+                const p = profiles.find((x) => x.id === v);
+                if (p?.contract_type === "pj") setTaskType("external");
+                else if (p?.contract_type === "clt") setTaskType("internal");
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sem responsável</SelectItem>
-                  {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}</SelectItem>)}
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name ?? "—"}{p.contract_type === "pj" ? " (PJ)" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
