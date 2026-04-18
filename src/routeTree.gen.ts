@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTasksRouteImport } from './routes/_app.tasks'
+import { Route as AppReportsRouteImport } from './routes/_app.reports'
 import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
@@ -38,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppTasksRoute = AppTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsRoute = AppProjectsRouteImport.update({
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AppNotificationsRoute
   '/payments': typeof AppPaymentsRoute
   '/projects': typeof AppProjectsRoute
+  '/reports': typeof AppReportsRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof AppNotificationsRoute
   '/payments': typeof AppPaymentsRoute
   '/projects': typeof AppProjectsRoute
+  '/reports': typeof AppReportsRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/payments': typeof AppPaymentsRoute
   '/_app/projects': typeof AppProjectsRoute
+  '/_app/reports': typeof AppReportsRoute
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/payments'
     | '/projects'
+    | '/reports'
     | '/tasks'
     | '/tasks/$taskId'
   fileRoutesByTo: FileRoutesByTo
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/payments'
     | '/projects'
+    | '/reports'
     | '/tasks'
     | '/tasks/$taskId'
   id:
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/_app/notifications'
     | '/_app/payments'
     | '/_app/projects'
+    | '/_app/reports'
     | '/_app/tasks'
     | '/_app/tasks/$taskId'
   fileRoutesById: FileRoutesById
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof AppTasksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports': {
+      id: '/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/projects': {
@@ -261,6 +280,7 @@ interface AppRouteChildren {
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppPaymentsRoute: typeof AppPaymentsRoute
   AppProjectsRoute: typeof AppProjectsRoute
+  AppReportsRoute: typeof AppReportsRoute
   AppTasksRoute: typeof AppTasksRouteWithChildren
 }
 
@@ -271,6 +291,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppNotificationsRoute: AppNotificationsRoute,
   AppPaymentsRoute: AppPaymentsRoute,
   AppProjectsRoute: AppProjectsRoute,
+  AppReportsRoute: AppReportsRoute,
   AppTasksRoute: AppTasksRouteWithChildren,
 }
 
