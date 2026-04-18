@@ -29,11 +29,14 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const [assigneeId, setAssigneeId] = useState<string>("none");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [dueDate, setDueDate] = useState("");
+  const [taskType, setTaskType] = useState<"internal" | "external">("internal");
+  const [serviceValue, setServiceValue] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   const reset = () => {
     setTitle(""); setDescription(""); setAssigneeId("none");
     setProjectId(defaultProjectId ?? "none"); setPriority("medium"); setDueDate("");
+    setTaskType("internal"); setServiceValue("");
   };
 
   const onSubmit = async (e: React.FormEvent) => {
