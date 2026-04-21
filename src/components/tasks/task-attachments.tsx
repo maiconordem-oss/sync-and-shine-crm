@@ -33,7 +33,35 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [pasteFocus, setPasteFocus] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pasteRef = useRef<HTMLDivElement>(null);
+
+  // Global paste listener — capture images pasted anywhere on the page
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      const files: File[] = [];
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f && f.type.startsWith("image/")) files.push(f);
+        }
+      }
+      if (files.length === 0) return;
+      // If user is typing in an input/textarea, only capture if there's no text being pasted
+      if (isEditable && e.clipboardData.getData("text")) return;
+      e.preventDefault();
+      void upload(files);
+      toast.success(`Colando ${files.length} imagem(ns)...`);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, user]);
 
   const load = async () => {
     const { data, error } = await supabase
@@ -110,15 +138,20 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
       </CardHeader>
       <CardContent>
         <div
+          ref={pasteRef}
+          tabIndex={0}
+          onFocus={() => setPasteFocus(true)}
+          onBlur={() => setPasteFocus(false)}
+          onClick={() => pasteRef.current?.focus()}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
             e.preventDefault(); setDragOver(false);
             if (e.dataTransfer.files.length) void upload(e.dataTransfer.files);
           }}
-          className={`rounded-md border-2 border-dashed p-4 text-center text-sm text-muted-foreground transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-muted"}`}
+          className={`rounded-md border-2 border-dashed p-4 text-center text-sm text-muted-foreground transition-colors cursor-pointer outline-none ${dragOver || pasteFocus ? "border-primary bg-primary/5" : "border-muted"}`}
         >
-          Arraste fotos ou arquivos aqui (máx. 20MB cada)
+          {pasteFocus ? "Pronto! Pressione Ctrl+V (ou Cmd+V) para colar" : "Arraste, cole (Ctrl+V) ou clique para enviar arquivos (máx. 20MB)"}
         </div>
 
         {items.length > 0 && (
