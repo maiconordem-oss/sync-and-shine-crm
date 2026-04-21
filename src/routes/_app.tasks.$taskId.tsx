@@ -215,9 +215,34 @@ function TaskDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Subtarefas</CardTitle>
+          {task.task_type === "external" && (
+            <ReviewActions
+              task={task}
+              isManager={!!profile && profiles.find((p) => p.id === user?.id) && false ? false : undefined as unknown as boolean}
+              onSendReview={async () => {
+                await update({ status: "in_review" });
+                toast.success("Tarefa enviada para revisão");
+              }}
+              onApprove={async () => {
+                const { error } = await supabase.from("tasks").update({ status: "done" }).eq("id", task.id);
+                if (error) { toast.error(error.message); return; }
+                toast.success("Trabalho aprovado! Pagamento gerado.");
+                void load();
+              }}
+              onReject={async (reason: string) => {
+                if (user) {
+                  await supabase.from("comments").insert([{
+                    task_id: task.id, author_id: user.id,
+                    content: `❌ Trabalho reprovado: ${reason}`,
+                  }]);
+                }
+                await update({ status: "in_progress" });
+                toast.success("Tarefa devolvida para ajustes");
+                void load();
+              }}
+            />
+          )}
+
               <Button size="sm" variant="outline" onClick={() => setCreateSubOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" /> Adicionar
               </Button>
