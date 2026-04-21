@@ -138,15 +138,20 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
       </CardHeader>
       <CardContent>
         <div
+          ref={pasteRef}
+          tabIndex={0}
+          onFocus={() => setPasteFocus(true)}
+          onBlur={() => setPasteFocus(false)}
+          onClick={() => pasteRef.current?.focus()}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => {
             e.preventDefault(); setDragOver(false);
             if (e.dataTransfer.files.length) void upload(e.dataTransfer.files);
           }}
-          className={`rounded-md border-2 border-dashed p-4 text-center text-sm text-muted-foreground transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-muted"}`}
+          className={`rounded-md border-2 border-dashed p-4 text-center text-sm text-muted-foreground transition-colors cursor-pointer outline-none ${dragOver || pasteFocus ? "border-primary bg-primary/5" : "border-muted"}`}
         >
-          Arraste fotos ou arquivos aqui (máx. 20MB cada)
+          {pasteFocus ? "Pronto! Pressione Ctrl+V (ou Cmd+V) para colar" : "Arraste, cole (Ctrl+V) ou clique para enviar arquivos (máx. 20MB)"}
         </div>
 
         {items.length > 0 && (
