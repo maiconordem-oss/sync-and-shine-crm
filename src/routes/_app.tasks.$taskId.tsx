@@ -463,3 +463,90 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function ReviewActions({
+  task, isManager, isAssignee, onSendReview, onApprove, onReject,
+}: {
+  task: { status: TaskStatus; service_value: number | null; assignee_id: string | null };
+  isManager: boolean;
+  isAssignee: boolean;
+  onSendReview: () => void | Promise<void>;
+  onApprove: () => void | Promise<void>;
+  onReject: (reason: string) => void | Promise<void>;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+
+  if (task.status === "done") {
+    return (
+      <Card className="border-emerald-200 bg-emerald-50/40">
+        <CardContent className="py-3 flex items-center gap-2 text-sm text-emerald-800">
+          <CheckCircle2 className="h-4 w-4" />
+          Trabalho aprovado e concluído.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (task.status === "in_review") {
+    return (
+      <Card className="border-purple-200 bg-purple-50/40">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 text-purple-900">
+            <ClipboardCheck className="h-4 w-4" /> Aguardando revisão
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {isManager ? (
+            !rejecting ? (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => void onApprove()}>
+                  <CheckCircle2 className="h-4 w-4 mr-1" /> Aprovar e gerar pagamento
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
+                  <XCircle className="h-4 w-4 mr-1" /> Reprovar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Textarea value={reason} onChange={(e) => setReason(e.target.value)}
+                  placeholder="Motivo da reprovação (obrigatório)" rows={2} />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="destructive" disabled={!reason.trim()}
+                    onClick={() => { void onReject(reason.trim()); setRejecting(false); setReason(""); }}>
+                    Confirmar reprovação
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setReason(""); }}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-purple-900">
+              Aguardando aprovação de um Admin ou Gestor.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Other statuses: PJ assignee can send for review
+  if (isAssignee) {
+    return (
+      <Card>
+        <CardContent className="py-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground">
+            Concluiu o trabalho? Envie para revisão antes da aprovação.
+          </div>
+          <Button size="sm" onClick={() => void onSendReview()}>
+            <ClipboardCheck className="h-4 w-4 mr-1" /> Enviar para revisão
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
+}
