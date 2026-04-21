@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, Plus, Send, Trash2, Play, Square } from "lucide-react";
+import { ArrowLeft, Plus, Send, Trash2, Play, Square, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
@@ -18,7 +18,7 @@ import { PRIORITY_LABEL, STATUS_LABEL, PRIORITY_COLOR } from "@/lib/labels";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
 
-type TaskStatus = "new" | "in_progress" | "waiting" | "done" | "deferred";
+type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskFull {
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_app/tasks/$taskId")({
 
 function TaskDetailPage() {
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
-  const { user, profile } = useAuth();
+  const { user, profile, isManagerOrAdmin } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
@@ -214,6 +214,35 @@ function TaskDetailPage() {
               />
             </CardContent>
           </Card>
+
+          {task.task_type === "external" && (
+            <ReviewActions
+              task={task}
+              isManager={isManagerOrAdmin}
+              isAssignee={user?.id === task.assignee_id}
+              onSendReview={async () => {
+                await update({ status: "in_review" });
+                toast.success("Tarefa enviada para revisão");
+              }}
+              onApprove={async () => {
+                const { error } = await supabase.from("tasks").update({ status: "done" }).eq("id", task.id);
+                if (error) { toast.error(error.message); return; }
+                toast.success("Trabalho aprovado! Pagamento gerado.");
+                void load();
+              }}
+              onReject={async (reason: string) => {
+                if (user) {
+                  await supabase.from("comments").insert([{
+                    task_id: task.id, author_id: user.id,
+                    content: `❌ Trabalho reprovado: ${reason}`,
+                  }]);
+                }
+                await update({ status: "in_progress" });
+                toast.success("Tarefa devolvida para ajustes");
+                void load();
+              }}
+            />
+          )}
 
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -433,4 +462,91 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+function ReviewActions({
+  task, isManager, isAssignee, onSendReview, onApprove, onReject,
+}: {
+  task: { status: TaskStatus; service_value: number | null; assignee_id: string | null };
+  isManager: boolean;
+  isAssignee: boolean;
+  onSendReview: () => void | Promise<void>;
+  onApprove: () => void | Promise<void>;
+  onReject: (reason: string) => void | Promise<void>;
+}) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+
+  if (task.status === "done") {
+    return (
+      <Card className="border-emerald-200 bg-emerald-50/40">
+        <CardContent className="py-3 flex items-center gap-2 text-sm text-emerald-800">
+          <CheckCircle2 className="h-4 w-4" />
+          Trabalho aprovado e concluído.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (task.status === "in_review") {
+    return (
+      <Card className="border-purple-200 bg-purple-50/40">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 text-purple-900">
+            <ClipboardCheck className="h-4 w-4" /> Aguardando revisão
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {isManager ? (
+            !rejecting ? (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => void onApprove()}>
+                  <CheckCircle2 className="h-4 w-4 mr-1" /> Aprovar e gerar pagamento
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
+                  <XCircle className="h-4 w-4 mr-1" /> Reprovar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Textarea value={reason} onChange={(e) => setReason(e.target.value)}
+                  placeholder="Motivo da reprovação (obrigatório)" rows={2} />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="destructive" disabled={!reason.trim()}
+                    onClick={() => { void onReject(reason.trim()); setRejecting(false); setReason(""); }}>
+                    Confirmar reprovação
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setReason(""); }}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-purple-900">
+              Aguardando aprovação de um Admin ou Gestor.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Other statuses: PJ assignee can send for review
+  if (isAssignee) {
+    return (
+      <Card>
+        <CardContent className="py-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground">
+            Concluiu o trabalho? Envie para revisão antes da aprovação.
+          </div>
+          <Button size="sm" onClick={() => void onSendReview()}>
+            <ClipboardCheck className="h-4 w-4 mr-1" /> Enviar para revisão
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
 }

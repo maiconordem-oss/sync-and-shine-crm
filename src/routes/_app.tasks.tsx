@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_app/tasks")({
   component: TasksPage,
 });
 
-type TaskStatus = "new" | "in_progress" | "waiting" | "done" | "deferred";
+type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskRow {
