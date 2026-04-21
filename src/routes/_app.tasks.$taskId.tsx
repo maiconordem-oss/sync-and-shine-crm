@@ -46,7 +46,7 @@ export const Route = createFileRoute("/_app/tasks/$taskId")({
 
 function TaskDetailPage() {
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
-  const { user, profile } = useAuth();
+  const { user, profile, isManagerOrAdmin } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
