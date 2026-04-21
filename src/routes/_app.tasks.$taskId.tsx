@@ -218,7 +218,8 @@ function TaskDetailPage() {
           {task.task_type === "external" && (
             <ReviewActions
               task={task}
-              isManager={!!profile && profiles.find((p) => p.id === user?.id) && false ? false : undefined as unknown as boolean}
+              isManager={isManagerOrAdmin}
+              isAssignee={user?.id === task.assignee_id}
               onSendReview={async () => {
                 await update({ status: "in_review" });
                 toast.success("Tarefa enviada para revisão");
@@ -243,6 +244,9 @@ function TaskDetailPage() {
             />
           )}
 
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Subtarefas</CardTitle>
               <Button size="sm" variant="outline" onClick={() => setCreateSubOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" /> Adicionar
               </Button>
