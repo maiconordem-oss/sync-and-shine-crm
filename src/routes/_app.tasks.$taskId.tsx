@@ -18,7 +18,7 @@ import { PRIORITY_LABEL, STATUS_LABEL, PRIORITY_COLOR } from "@/lib/labels";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
 
-type TaskStatus = "new" | "in_progress" | "waiting" | "done" | "deferred";
+type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskFull {
