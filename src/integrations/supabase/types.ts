@@ -587,7 +587,13 @@ export type Database = {
         | "automation"
       payment_status: "pending" | "paid" | "cancelled"
       task_priority: "low" | "medium" | "high" | "urgent"
-      task_status: "new" | "in_progress" | "waiting" | "done" | "deferred"
+      task_status:
+        | "new"
+        | "in_progress"
+        | "waiting"
+        | "done"
+        | "deferred"
+        | "in_review"
       task_type: "internal" | "external"
     }
     CompositeTypes: {
@@ -729,7 +735,14 @@ export const Constants = {
       ],
       payment_status: ["pending", "paid", "cancelled"],
       task_priority: ["low", "medium", "high", "urgent"],
-      task_status: ["new", "in_progress", "waiting", "done", "deferred"],
+      task_status: [
+        "new",
+        "in_progress",
+        "waiting",
+        "done",
+        "deferred",
+        "in_review",
+      ],
       task_type: ["internal", "external"],
     },
   },
