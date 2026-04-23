@@ -277,14 +277,36 @@ function TaskDetailPage() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <Link to="/tasks" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
-        <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link to="/tasks" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => void copyTaskLink()}>
+            <Copy className="h-4 w-4" /> Copiar link
+          </Button>
+          {canDeleteTask && (
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Excluir tarefa
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs uppercase tracking-normal text-muted-foreground">Tarefa</div>
+                  {task.parent_task_id && <Badge variant="outline">Subtarefa</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{STATUS_LABEL[task.status]}</Badge>
+                  <Badge className={PRIORITY_COLOR[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>
+                </div>
+              </div>
               <Input
                 value={task.title}
                 onChange={(e) => setTask({ ...task, title: e.target.value })}
@@ -293,15 +315,39 @@ function TaskDetailPage() {
                 disabled={!canEditTask}
               />
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <Textarea
                 value={task.description ?? ""}
                 onChange={(e) => setTask({ ...task, description: e.target.value })}
                 onBlur={(e) => void update({ description: e.target.value })}
                 placeholder="Descrição..."
-                rows={4}
+                rows={5}
                 disabled={!canEditTask}
               />
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Link de referência</div>
+                  <Input
+                    type="url"
+                    value={task.reference_url ?? ""}
+                    onChange={(e) => setTask({ ...task, reference_url: e.target.value })}
+                    onBlur={(e) => void update({ reference_url: e.target.value.trim() || null })}
+                    placeholder="https://..."
+                    disabled={!canEditTask}
+                  />
+                </div>
+                {task.reference_url ? (
+                  <Button type="button" variant="outline" asChild>
+                    <a href={task.reference_url} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" /> Abrir link
+                    </a>
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" disabled>
+                    <ExternalLink className="h-4 w-4" /> Sem link
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
