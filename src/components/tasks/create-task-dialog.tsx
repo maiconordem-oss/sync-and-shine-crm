@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
 import { PRIORITY_LABEL } from "@/lib/labels";
+import { Briefcase, CheckCircle2, ClipboardCheck, CreditCard, PenSquare } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -33,6 +34,31 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const [serviceValue, setServiceValue] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!open || !user) return;
+    setAssigneeId((current) => (current === "none" ? user.id : current));
+    setProjectId(defaultProjectId ?? "none");
+  }, [defaultProjectId, open, user]);
+
+  const selectedAssignee = useMemo(
+    () => profiles.find((person) => person.id === (assigneeId === "none" ? null : assigneeId)),
+    [assigneeId, profiles],
+  );
+
+  const flowSteps = taskType === "external"
+    ? [
+        { label: "Criar", icon: PenSquare },
+        { label: "Executar", icon: Briefcase },
+        { label: "Revisão", icon: ClipboardCheck },
+        { label: "Aprovar", icon: CheckCircle2 },
+        { label: "Pagamento", icon: CreditCard },
+      ]
+    : [
+        { label: "Criar", icon: PenSquare },
+        { label: "Executar", icon: Briefcase },
+        { label: "Concluir", icon: CheckCircle2 },
+      ];
+
   const reset = () => {
     setTitle(""); setDescription(""); setAssigneeId("none");
     setProjectId(defaultProjectId ?? "none"); setPriority("medium"); setDueDate("");
@@ -41,10 +67,25 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      toast.error("Você precisa estar logado para criar uma tarefa.");
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      toast.error("Informe um título para a tarefa.");
+      return;
+    }
+
+    if (taskType === "external" && !serviceValue) {
+      toast.error("Informe o valor do serviço para tarefas externas.");
+      return;
+    }
+
     setBusy(true);
     const payload = {
-      title,
+      title: trimmedTitle,
       description: description || null,
       project_id: projectId === "none" ? null : projectId,
       assignee_id: assigneeId === "none" ? null : assigneeId,
@@ -81,6 +122,31 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
           <DialogTitle>{parentTaskId ? "Nova subtarefa" : "Nova tarefa"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <div className="text-sm font-medium">Fluxo previsto</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-5">
+              {flowSteps.map((step, index) => {
+                const Icon = step.icon;
+                return (
+                  <div key={step.label} className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
+                    <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">Etapa {index + 1}</div>
+                      <div className="font-medium">{step.label}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {taskType === "external"
+                ? "Tarefas externas passam por revisão de Admin ou Gestor antes de liberar o pagamento."
+                : "Tarefas internas seguem direto até a conclusão, sem etapa de pagamento."}
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Título *</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
@@ -118,6 +184,11 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
                   ))}
                 </SelectContent>
               </Select>
+                <p className="text-xs text-muted-foreground">
+                  {selectedAssignee
+                    ? `Responsável atual: ${selectedAssignee.full_name ?? "Sem nome"}${selectedAssignee.contract_type === "pj" ? " • fluxo com revisão e pagamento" : " • fluxo interno"}`
+                    : "Escolha um responsável para testar o fluxo completo da tarefa."}
+                </p>
             </div>
             <div className="space-y-1.5">
               <Label>Prioridade</Label>
