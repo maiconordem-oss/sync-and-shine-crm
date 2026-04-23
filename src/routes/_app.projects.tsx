@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, FolderKanban } from "lucide-react";
+import { Plus, FolderKanban, LayoutGrid, ListFilter } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ function ProjectsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3b82f6");
+  const activeProjects = projects.filter((project) => !project.archived).length;
 
   const load = async () => {
     const { data } = await supabase.from("projects").select("*").order("created_at", { ascending: false });
@@ -53,31 +54,73 @@ function ProjectsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Projetos</h1>
-          <p className="text-sm text-muted-foreground">Agrupe tarefas por iniciativa.</p>
+          <h1 className="text-2xl font-semibold">Projetos</h1>
+          <p className="text-sm text-muted-foreground">Visão central de iniciativas e carga operacional.</p>
         </div>
-        {isManagerOrAdmin && (
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Novo projeto
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground md:flex">
+            <LayoutGrid className="h-4 w-4" />
+            {activeProjects} ativos
+          </div>
+          {isManagerOrAdmin && (
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Novo projeto
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div>
+              <div className="text-sm font-medium">Painel</div>
+              <div className="mt-1 text-xs text-muted-foreground">Estrutura inspirada em workspace corporativo.</div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Projetos</span>
+                <span className="font-medium text-foreground">{projects.length}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Ativos</span>
+                <span className="font-medium text-foreground">{activeProjects}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Tarefas</span>
+                <span className="font-medium text-foreground">{Object.values(counts).reduce((acc, value) => acc + value, 0)}</span>
+              </div>
+            </div>
+            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+              <div className="mb-1 flex items-center gap-2 text-foreground">
+                <ListFilter className="h-3.5 w-3.5" /> Visão rápida
+              </div>
+              Abra um projeto para ir direto para as tarefas filtradas.
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {projects.map((p) => (
           <Link key={p.id} to="/tasks" search={{ projectId: p.id } as never}>
-            <Card className="hover:border-primary/50 transition">
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className="h-10 w-10 rounded-lg grid place-items-center text-white" style={{ background: p.color ?? "#3b82f6" }}>
+            <Card className="h-full border-border/80 bg-card transition hover:border-primary/40 hover:shadow-sm">
+              <CardContent className="flex h-full items-start gap-3 p-4">
+                <div className="grid h-11 w-11 place-items-center rounded-md text-white" style={{ background: p.color ?? "#3b82f6" }}>
                   <FolderKanban className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{p.name}</div>
-                  <div className="text-xs text-muted-foreground line-clamp-2">{p.description ?? "—"}</div>
-                  <div className="text-xs text-muted-foreground mt-1.5">{counts[p.id] ?? 0} tarefas</div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="font-medium truncate">{p.name}</div>
+                    <span className="rounded-sm bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{counts[p.id] ?? 0}</span>
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.description ?? "Sem descrição"}</div>
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{p.archived ? "Arquivado" : "Ativo"}</span>
+                    <span className="font-medium text-foreground">{counts[p.id] ?? 0} tarefas</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -86,6 +129,7 @@ function ProjectsPage() {
         {projects.length === 0 && (
           <Card><CardContent className="p-6 text-center text-muted-foreground">Nenhum projeto ainda.</CardContent></Card>
         )}
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

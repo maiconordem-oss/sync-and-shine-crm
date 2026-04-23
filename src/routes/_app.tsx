@@ -11,6 +11,8 @@ import {
   LogOut,
   CheckCircle2,
   Bell,
+  Search,
+  PanelLeftClose,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,6 +21,25 @@ import { cn } from "@/lib/utils";
 import { ROLE_LABEL } from "@/lib/labels";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -81,77 +102,148 @@ function AppLayout() {
   const displayRole = roles[0] ? ROLE_LABEL[roles[0]] : "Membro";
 
   return (
-    <div className="min-h-screen flex bg-muted/30">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-60 flex-col border-r bg-sidebar text-sidebar-foreground">
-        <div className="h-14 flex items-center gap-2 px-4 border-b font-semibold">
-          <CheckCircle2 className="h-5 w-5 text-primary" /> FlowCRM
-        </div>
-        <nav className="flex-1 p-2 space-y-0.5">
-          {visibleNav.map((n) => {
-            const active = location.pathname.startsWith(n.to);
-            const Icon = n.icon;
-            return (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    : "hover:bg-sidebar-accent/60",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {n.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="p-3 border-t flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>{initials(profile?.full_name)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">{profile?.full_name ?? "Usuário"}</div>
-            <div className="text-xs text-muted-foreground">{displayRole}</div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={async () => {
-              await signOut();
-              navigate({ to: "/auth" });
-            }}
-            title="Sair"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      </aside>
+    <SidebarProvider defaultOpen>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar
+          visibleNav={visibleNav}
+          pathname={location.pathname}
+          profileName={profile?.full_name ?? "Usuário"}
+          displayRole={displayRole}
+          onSignOut={async () => {
+            await signOut();
+            navigate({ to: "/auth" });
+          }}
+        />
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b bg-background flex items-center px-4 md:px-6 gap-3">
-          <div className="md:hidden font-semibold flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-primary" /> FlowCRM
-          </div>
-          <div className="flex-1" />
-          <Link to="/notifications" className="relative">
-            <Button variant="ghost" size="icon">
-              <Bell className="h-4 w-4" />
-            </Button>
-            {unread > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
-                {unread}
-              </span>
-            )}
-          </Link>
-        </header>
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
-          <Outlet />
-        </main>
+        <SidebarInset className="min-w-0 bg-background">
+          <header className="flex h-14 items-center gap-3 border-b bg-card px-4 md:px-6">
+            <SidebarTrigger className="text-muted-foreground" />
+            <div className="hidden min-w-[260px] max-w-[420px] flex-1 md:block">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input className="h-9 border-border/80 bg-background pl-9" placeholder="Pesquisar" />
+              </div>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Link to="/notifications" className="relative">
+                <Button variant="ghost" size="icon" className="rounded-md">
+                  <Bell className="h-4 w-4" />
+                </Button>
+                {unread > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground flex items-center justify-center">
+                    {unread}
+                  </span>
+                )}
+              </Link>
+              <div className="hidden items-center gap-2 rounded-md border bg-background px-2 py-1.5 md:flex">
+                <Avatar className="h-7 w-7">
+                  <AvatarFallback>{initials(profile?.full_name)}</AvatarFallback>
+                </Avatar>
+                <div className="leading-none">
+                  <div className="text-sm font-medium">{profile?.full_name ?? "Usuário"}</div>
+                  <div className="text-[11px] text-muted-foreground">{displayRole}</div>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 overflow-auto bg-background p-4 md:p-6">
+            <Outlet />
+          </main>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
+  );
+}
+
+function AppSidebar({
+  visibleNav,
+  pathname,
+  profileName,
+  displayRole,
+  onSignOut,
+}: {
+  visibleNav: NavItem[];
+  pathname: string;
+  profileName: string;
+  displayRole: string;
+  onSignOut: () => Promise<void>;
+}) {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      <SidebarHeader className="gap-3 px-3 py-4">
+        <div className="flex items-center gap-3 rounded-md px-2 text-sidebar-foreground">
+          <div className="grid h-9 w-9 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">FlowCRM</div>
+              <div className="text-[11px] text-sidebar-foreground/75">Workspace</div>
+            </div>
+          )}
+        </div>
+        {!collapsed && (
+          <div className="relative px-1">
+            <Search className="absolute left-4 top-2.5 h-4 w-4 text-sidebar-foreground/70" />
+            <Input className="h-9 border-white/15 bg-white/10 pl-9 text-sidebar-foreground placeholder:text-sidebar-foreground/65" placeholder="Pesquisar menu" />
+          </div>
+        )}
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Operação</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visibleNav.map((n) => {
+                const active = pathname.startsWith(n.to);
+                const Icon = n.icon;
+                return (
+                  <SidebarMenuItem key={n.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={n.label} className="h-10 rounded-md px-3">
+                      <Link to={n.to}>
+                        <Icon className="h-4 w-4" />
+                        <span>{n.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarSeparator />
+
+      <SidebarFooter className="p-3">
+        <div className="flex items-center gap-3 rounded-md bg-white/10 px-2 py-2 text-sidebar-foreground">
+          <Avatar className="h-8 w-8 border border-white/20">
+            <AvatarFallback className="bg-white/15 text-sidebar-foreground">{initials(profileName)}</AvatarFallback>
+          </Avatar>
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{profileName}</div>
+                <div className="text-[11px] text-sidebar-foreground/70">{displayRole}</div>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground hover:bg-white/15 hover:text-sidebar-foreground" onClick={() => void onSignOut()}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+        {collapsed && (
+          <Button type="button" variant="ghost" size="icon" className="mx-auto h-8 w-8 text-sidebar-foreground hover:bg-white/15 hover:text-sidebar-foreground" onClick={() => void onSignOut()}>
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
+        )}
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }

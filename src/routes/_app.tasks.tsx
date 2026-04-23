@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { GripVertical, Plus, KanbanSquare, List as ListIcon, Search } from "lucide-react";
+import { GripVertical, Plus, KanbanSquare, List as ListIcon, Search, SlidersHorizontal, ChartColumnBig } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -100,6 +100,8 @@ function TasksPage() {
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const overdueCount = filtered.filter((task) => isOverdue(task.due_date) && task.status !== "done").length;
+  const inProgressCount = filtered.filter((task) => task.status === "in_progress").length;
 
   if (pageLoading || loading) {
     return <div className="p-6 text-muted-foreground">Carregando tarefas...</div>;
@@ -142,11 +144,11 @@ function TasksPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Tarefas</h1>
-          <p className="text-sm text-muted-foreground">Gerencie tudo em um Kanban ou em lista.</p>
+          <h1 className="text-2xl font-semibold">Tarefas</h1>
+          <p className="text-sm text-muted-foreground">Workspace operacional com foco em acompanhamento, filtros e detalhe rápido.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-md border bg-background p-0.5">
@@ -171,45 +173,79 @@ function TasksPage() {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-3 flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8" />
-          </div>
-          <Select value={filterProject} onValueChange={setFilterProject}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Projeto" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os projetos</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {profiles.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+      <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)]">
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div>
+              <div className="text-sm font-medium">Resumo</div>
+              <div className="mt-1 text-xs text-muted-foreground">Estrutura densa e clara no estilo workspace.</div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Total filtrado</span>
+                <span className="font-medium text-foreground">{filtered.length}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Em andamento</span>
+                <span className="font-medium text-foreground">{inProgressCount}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-muted/60 px-3 py-2">
+                <span className="text-muted-foreground">Atrasadas</span>
+                <span className="font-medium text-foreground">{overdueCount}</span>
+              </div>
+            </div>
+            <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+              <div className="mb-1 flex items-center gap-2 text-foreground">
+                <ChartColumnBig className="h-3.5 w-3.5" /> Situação atual
+              </div>
+              Arraste no Kanban ou use a lista para leitura mais densa.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-3 flex flex-wrap gap-2">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar tarefa, projeto ou contexto" className="pl-8" />
+            </div>
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground">
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+            </div>
+            <Select value={filterProject} onValueChange={setFilterProject}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Projeto" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os projetos</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {profiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      </div>
 
       {view === "kanban" ? (
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
             {STATUS_ORDER.map((s) => (
               <KanbanColumn key={s} status={s} tasks={filtered.filter((t) => t.status === s)}
                 profileById={profileById} projectById={projectById}
