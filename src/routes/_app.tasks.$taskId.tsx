@@ -507,6 +507,48 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function VisualTaskFlow({ currentStatus }: { currentStatus: TaskStatus }) {
+  const steps = [
+    { key: "new", label: "Criada", icon: PenSquare },
+    { key: "in_progress", label: "Execução", icon: Briefcase },
+    { key: "in_review", label: "Revisão", icon: ClipboardCheck },
+    { key: "done", label: "Aprovada", icon: CheckCircle2 },
+    { key: "payment", label: "Pagamento", icon: CreditCard },
+  ] as const;
+
+  const activeIndex = currentStatus === "done"
+    ? steps.length - 1
+    : Math.max(steps.findIndex((step) => step.key === currentStatus), 0);
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="text-sm font-medium">Fluxo visual</div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-5">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = index <= activeIndex;
+          return (
+            <div
+              key={step.label}
+              className={isActive ? "rounded-md border bg-background px-3 py-2" : "rounded-md border border-dashed bg-background/70 px-3 py-2"}
+            >
+              <div className="flex items-center gap-2">
+                <div className={isActive ? "grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary" : "grid h-8 w-8 place-items-center rounded-md bg-muted text-muted-foreground"}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Etapa {index + 1}</div>
+                  <div className="text-sm font-medium">{step.label}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ReviewActions({
   task, isManager, isAssignee, onSendReview, onApprove, onReject,
 }: {
