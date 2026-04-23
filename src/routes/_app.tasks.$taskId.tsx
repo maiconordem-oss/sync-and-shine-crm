@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, Plus, Send, Trash2, Play, Square, ClipboardCheck, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Plus, Send, Trash2, Play, Square, ClipboardCheck, CheckCircle2, XCircle, Briefcase, CreditCard, PenSquare } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
@@ -200,6 +200,7 @@ function TaskDetailPage() {
   };
 
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
+  const canEditTask = isManagerOrAdmin || user?.id === task?.created_by || user?.id === task?.assignee_id;
 
   if (pageLoading || loading) return <div className="p-6 text-muted-foreground">Carregando tarefa...</div>;
 
@@ -235,6 +236,7 @@ function TaskDetailPage() {
                 onChange={(e) => setTask({ ...task, title: e.target.value })}
                 onBlur={(e) => void update({ title: e.target.value })}
                 className="text-xl font-semibold border-0 px-0 focus-visible:ring-0 shadow-none"
+                disabled={!canEditTask}
               />
             </CardHeader>
             <CardContent className="space-y-3">
@@ -244,6 +246,7 @@ function TaskDetailPage() {
                 onBlur={(e) => void update({ description: e.target.value })}
                 placeholder="Descrição..."
                 rows={4}
+                disabled={!canEditTask}
               />
             </CardContent>
           </Card>
@@ -354,8 +357,11 @@ function TaskDetailPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Detalhes</CardTitle></CardHeader>
             <CardContent className="space-y-3">
+              {task.task_type === "external" && (
+                <VisualTaskFlow currentStatus={task.status} />
+              )}
               <Field label="Status">
-                <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })}>
+                <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })} disabled={!canEditTask}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -363,7 +369,7 @@ function TaskDetailPage() {
                 </Select>
               </Field>
               <Field label="Prioridade">
-                <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })}>
+                <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })} disabled={!canEditTask}>
                   <SelectTrigger>
                     <SelectValue>
                       <Badge className={PRIORITY_COLOR[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>
@@ -382,7 +388,7 @@ function TaskDetailPage() {
                   if (p?.contract_type === "pj" && task.task_type !== "external") patch.task_type = "external";
                   if (p?.contract_type === "clt" && task.task_type !== "internal") patch.task_type = "internal";
                   void update(patch);
-                }}>
+                }} disabled={!canEditTask}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
@@ -395,7 +401,7 @@ function TaskDetailPage() {
                 </Select>
               </Field>
               <Field label="Tipo">
-                <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })}>
+                <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEditTask}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="internal">Interna (CLT)</SelectItem>
@@ -411,11 +417,12 @@ function TaskDetailPage() {
                     onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
                     onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })}
                     placeholder="Gera pagamento ao concluir"
+                    disabled={!canEditTask}
                   />
                 </Field>
               )}
               <Field label="Projeto">
-                <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })}>
+                <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })} disabled={!canEditTask}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem projeto</SelectItem>
@@ -428,6 +435,7 @@ function TaskDetailPage() {
                   type="date"
                   value={task.due_date ? task.due_date.slice(0, 10) : ""}
                   onChange={(e) => void update({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  disabled={!canEditTask}
                 />
               </Field>
               <Field label="Horas estimadas">
@@ -436,10 +444,12 @@ function TaskDetailPage() {
                   value={task.estimated_hours ?? ""}
                   onChange={(e) => setTask({ ...task, estimated_hours: e.target.value ? Number(e.target.value) : null })}
                   onBlur={(e) => void update({ estimated_hours: e.target.value ? Number(e.target.value) : null })}
+                  disabled={!canEditTask}
                 />
               </Field>
-              <div className="text-xs text-muted-foreground pt-2">
-                Criada em {formatDate(task.completed_at ?? undefined)}
+              <div className="text-xs text-muted-foreground pt-2 space-y-1">
+                <div>Criada em {formatDate((task as TaskFull & { created_at?: string | null }).created_at ?? undefined)}</div>
+                {!canEditTask && <div>Você pode acompanhar, comentar e anexar, mas não editar esta tarefa.</div>}
               </div>
             </CardContent>
           </Card>
