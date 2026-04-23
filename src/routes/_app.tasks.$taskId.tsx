@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, Plus, Send, Trash2, Play, Square, ClipboardCheck, CheckCircle2, XCircle, Briefcase, CreditCard, PenSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Send,
+  Trash2,
+  Play,
+  Square,
+  ClipboardCheck,
+  CheckCircle2,
+  XCircle,
+  Briefcase,
+  CreditCard,
+  PenSquare,
+  ExternalLink,
+  Copy,
+  UserCog,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
@@ -17,6 +33,16 @@ import { initials, formatDate, formatDateTime } from "@/lib/format";
 import { PRIORITY_LABEL, STATUS_LABEL, PRIORITY_COLOR } from "@/lib/labels";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
