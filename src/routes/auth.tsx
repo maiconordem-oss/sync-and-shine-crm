@@ -1,5 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,21 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const { signIn, signUp, isAuthenticated, loading } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!loading && isAuthenticated) {
+      void navigate({ to: "/dashboard", replace: true });
+    }
+  }, [isAuthenticated, loading, navigate]);
+
   if (!loading && isAuthenticated) {
-    throw redirect({ to: "/dashboard" });
+    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Redirecionando...</div>;
   }
 
   const onSubmit = async (e: React.FormEvent) => {
