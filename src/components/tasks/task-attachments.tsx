@@ -94,21 +94,38 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         contentType: file.type, upsert: false,
       });
       if (upErr) { toast.error(`${file.name}: ${upErr.message}`); continue; }
-      const { error: dbErr } = await supabase.from("attachments").insert([{
+      const { data: inserted, error: dbErr } = await supabase.from("attachments").insert([{
         task_id: taskId,
         uploaded_by: user.id,
         file_name: file.name,
         storage_path: path,
         mime_type: file.type || null,
         size_bytes: file.size,
-      }]);
+      }]).select().single();
       if (dbErr) {
         toast.error(`${file.name}: ${dbErr.message}`);
         await supabase.storage.from(BUCKET).remove([path]);
+        continue;
+      }
+
+      const insertedAttachment = inserted as Attachment;
+      setItems((prev) => [insertedAttachment, ...prev]);
+
+      const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+      if (previewUrl) {
+        setUrls((prev) => ({ ...prev, [insertedAttachment.id]: previewUrl }));
+      }
+
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+      if (signed?.signedUrl) {
+        setUrls((prev) => {
+          const current = prev[insertedAttachment.id];
+          if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+          return { ...prev, [insertedAttachment.id]: signed.signedUrl };
+        });
       }
     }
     setBusy(false);
-    void load();
   };
 
   const remove = async (a: Attachment) => {
