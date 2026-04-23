@@ -1,10 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, KanbanSquare, List as ListIcon, Search } from "lucide-react";
+import { GripVertical, Plus, KanbanSquare, List as ListIcon, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -51,6 +51,7 @@ interface ProjectLite { id: string; name: string; color: string | null }
 
 function TasksPage() {
   const { user, profile, loading, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
@@ -211,7 +212,8 @@ function TasksPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {STATUS_ORDER.map((s) => (
               <KanbanColumn key={s} status={s} tasks={filtered.filter((t) => t.status === s)}
-                profileById={profileById} projectById={projectById} />
+                profileById={profileById} projectById={projectById}
+                onOpenTask={(taskId) => navigate({ to: "/tasks/$taskId", params: { taskId } })} />
             ))}
           </div>
         </DndContext>
@@ -234,11 +236,21 @@ function TasksPage() {
                   const proj = projectById(t.project_id);
                   const assignee = profileById(t.assignee_id);
                   return (
-                    <tr key={t.id} className="border-t hover:bg-muted/30">
+                    <tr
+                      key={t.id}
+                      tabIndex={0}
+                      role="button"
+                      onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: t.id } })}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void navigate({ to: "/tasks/$taskId", params: { taskId: t.id } });
+                        }
+                      }}
+                      className="border-t cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
                       <td className="p-3">
-                        <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="font-medium hover:underline">
-                          {t.title}
-                        </Link>
+                        <div className="font-medium">{t.title}</div>
                         {t.parent_task_id && (
                           <div className="mt-1 text-xs text-muted-foreground">Subtarefa</div>
                         )}
@@ -287,12 +299,13 @@ function TasksPage() {
 }
 
 function KanbanColumn({
-  status, tasks, profileById, projectById,
+  status, tasks, profileById, projectById, onOpenTask,
 }: {
   status: TaskStatus;
   tasks: TaskRow[];
   profileById: (id: string | null) => ProfileLite | undefined;
   projectById: (id: string | null) => ProjectLite | undefined;
+  onOpenTask: (taskId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
@@ -309,7 +322,7 @@ function KanbanColumn({
       </div>
       <div className="space-y-2 mt-1 flex-1">
         {tasks.map((t) => (
-          <KanbanCard key={t.id} task={t} profileById={profileById} projectById={projectById} />
+          <KanbanCard key={t.id} task={t} profileById={profileById} projectById={projectById} onOpenTask={onOpenTask} />
         ))}
       </div>
     </div>
@@ -317,11 +330,12 @@ function KanbanColumn({
 }
 
 function KanbanCard({
-  task, profileById, projectById,
+  task, profileById, projectById, onOpenTask,
 }: {
   task: TaskRow;
   profileById: (id: string | null) => ProfileLite | undefined;
   projectById: (id: string | null) => ProjectLite | undefined;
+  onOpenTask: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const proj = projectById(task.project_id);
@@ -331,21 +345,33 @@ function KanbanCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      tabIndex={0}
+      role="button"
+      onClick={() => onOpenTask(task.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenTask(task.id);
+        }
+      }}
       className={cn(
-        "rounded-md border bg-card p-3 shadow-sm cursor-grab active:cursor-grabbing space-y-2",
+        "rounded-md border bg-card p-3 shadow-sm cursor-pointer space-y-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         isDragging && "opacity-50",
       )}
     >
-      <Link
-        to="/tasks/$taskId"
-        params={{ taskId: task.id }}
-        className="block text-sm font-medium hover:underline"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {task.title}
-      </Link>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-medium">{task.title}</div>
+        <button
+          type="button"
+          {...listeners}
+          {...attributes}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Arrastar tarefa"
+          className="rounded-sm border bg-background p-1 text-muted-foreground cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      </div>
       {task.parent_task_id && <div className="text-[11px] text-muted-foreground">Subtarefa</div>}
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge className={cn("text-[10px] py-0", PRIORITY_COLOR[task.priority])}>{PRIORITY_LABEL[task.priority]}</Badge>
