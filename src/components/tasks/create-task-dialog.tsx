@@ -26,7 +26,6 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const { user, profile } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [referenceUrl, setReferenceUrl] = useState("");
   const [projectId, setProjectId] = useState<string>(defaultProjectId ?? "none");
   const [assigneeId, setAssigneeId] = useState<string>("none");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
@@ -63,7 +62,7 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const reset = () => {
     setTitle(""); setDescription(""); setAssigneeId("none");
     setProjectId(defaultProjectId ?? "none"); setPriority("medium"); setDueDate("");
-    setTaskType("internal"); setServiceValue(""); setReferenceUrl("");
+    setTaskType("internal"); setServiceValue("");
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -88,7 +87,6 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
     const payload = {
       title: trimmedTitle,
       description: description || null,
-      reference_url: referenceUrl.trim() || null,
       project_id: projectId === "none" ? null : projectId,
       assignee_id: assigneeId === "none" ? null : assigneeId,
       priority,
@@ -156,15 +154,6 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
           <div className="space-y-1.5">
             <Label>Descrição</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Link de referência</Label>
-            <Input
-              type="url"
-              value={referenceUrl}
-              onChange={(e) => setReferenceUrl(e.target.value)}
-              placeholder="https://..."
-            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
