@@ -428,6 +428,7 @@ export type Database = {
           estimated_hours: number | null
           id: string
           parent_task_id: string | null
+          reference_url: string | null
           position: number
           priority: Database["public"]["Enums"]["task_priority"]
           project_id: string | null
@@ -449,6 +450,7 @@ export type Database = {
           estimated_hours?: number | null
           id?: string
           parent_task_id?: string | null
+          reference_url?: string | null
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
@@ -470,6 +472,7 @@ export type Database = {
           estimated_hours?: number | null
           id?: string
           parent_task_id?: string | null
+          reference_url?: string | null
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null

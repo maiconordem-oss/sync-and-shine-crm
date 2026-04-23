@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, Plus, Send, Trash2, Play, Square, ClipboardCheck, CheckCircle2, XCircle, Briefcase, CreditCard, PenSquare } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Send,
+  Trash2,
+  Play,
+  Square,
+  ClipboardCheck,
+  CheckCircle2,
+  XCircle,
+  Briefcase,
+  CreditCard,
+  PenSquare,
+  ExternalLink,
+  Copy,
+  UserCog,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
@@ -17,6 +33,16 @@ import { initials, formatDate, formatDateTime } from "@/lib/format";
 import { PRIORITY_LABEL, STATUS_LABEL, PRIORITY_COLOR } from "@/lib/labels";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -38,6 +64,7 @@ interface TaskFull {
   completed_at: string | null;
   task_type: "internal" | "external";
   service_value: number | null;
+  reference_url: string | null;
 }
 
 export const Route = createFileRoute("/_app/tasks/$taskId")({
@@ -45,8 +72,9 @@ export const Route = createFileRoute("/_app/tasks/$taskId")({
 });
 
 function TaskDetailPage() {
+  const navigate = useNavigate();
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
-  const { user, profile, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
+  const { user, profile, isAdmin, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [taskMissing, setTaskMissing] = useState(false);
@@ -60,6 +88,8 @@ function TaskDetailPage() {
   const [newChecklist, setNewChecklist] = useState("");
   const [createSubOpen, setCreateSubOpen] = useState(false);
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingTask, setDeletingTask] = useState(false);
 
   const load = async () => {
     if (!isAuthenticated) return;
@@ -201,6 +231,30 @@ function TaskDetailPage() {
 
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
   const canEditTask = isManagerOrAdmin || user?.id === task?.created_by || user?.id === task?.assignee_id;
+  const canManageAssignee = isManagerOrAdmin;
+  const canDeleteTask = isAdmin || user?.id === task?.created_by;
+
+  const copyTaskLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link da tarefa copiado!");
+    } catch {
+      toast.error("Não foi possível copiar o link.");
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task) return;
+    setDeletingTask(true);
+    const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+    setDeletingTask(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Tarefa excluída.");
+    void navigate({ to: "/tasks" });
+  };
 
   if (pageLoading || loading) return <div className="p-6 text-muted-foreground">Carregando tarefa...</div>;
 
@@ -223,14 +277,36 @@ function TaskDetailPage() {
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <Link to="/tasks" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
-        <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link to="/tasks" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => void copyTaskLink()}>
+            <Copy className="h-4 w-4" /> Copiar link
+          </Button>
+          {canDeleteTask && (
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Excluir tarefa
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs uppercase tracking-normal text-muted-foreground">Tarefa</div>
+                  {task.parent_task_id && <Badge variant="outline">Subtarefa</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{STATUS_LABEL[task.status]}</Badge>
+                  <Badge className={PRIORITY_COLOR[task.priority]}>{PRIORITY_LABEL[task.priority]}</Badge>
+                </div>
+              </div>
               <Input
                 value={task.title}
                 onChange={(e) => setTask({ ...task, title: e.target.value })}
@@ -239,15 +315,39 @@ function TaskDetailPage() {
                 disabled={!canEditTask}
               />
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <Textarea
                 value={task.description ?? ""}
                 onChange={(e) => setTask({ ...task, description: e.target.value })}
                 onBlur={(e) => void update({ description: e.target.value })}
                 placeholder="Descrição..."
-                rows={4}
+                rows={5}
                 disabled={!canEditTask}
               />
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Link de referência</div>
+                  <Input
+                    type="url"
+                    value={task.reference_url ?? ""}
+                    onChange={(e) => setTask({ ...task, reference_url: e.target.value })}
+                    onBlur={(e) => void update({ reference_url: e.target.value.trim() || null })}
+                    placeholder="https://..."
+                    disabled={!canEditTask}
+                  />
+                </div>
+                {task.reference_url ? (
+                  <Button type="button" variant="outline" asChild>
+                    <a href={task.reference_url} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" /> Abrir link
+                    </a>
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" disabled>
+                    <ExternalLink className="h-4 w-4" /> Sem link
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -388,7 +488,7 @@ function TaskDetailPage() {
                   if (p?.contract_type === "pj" && task.task_type !== "external") patch.task_type = "external";
                   if (p?.contract_type === "clt" && task.task_type !== "internal") patch.task_type = "internal";
                   void update(patch);
-                }} disabled={!canEditTask}>
+                }} disabled={!canManageAssignee}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
@@ -399,6 +499,10 @@ function TaskDetailPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <UserCog className="h-3.5 w-3.5" />
+                  {canManageAssignee ? "Admin e gestor podem trocar o responsável." : "Somente Admin ou Gestor pode trocar o responsável."}
+                </div>
               </Field>
               <Field label="Tipo">
                 <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEditTask}>
@@ -494,6 +598,26 @@ function TaskDetailPage() {
         defaultProjectId={task.project_id ?? undefined}
         onCreated={() => void load()}
       />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação remove a tarefa atual. Use apenas quando tiver certeza.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleDeleteTask()}
+              disabled={deletingTask}
+            >
+              {deletingTask ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
