@@ -488,7 +488,7 @@ function TaskDetailPage() {
                   if (p?.contract_type === "pj" && task.task_type !== "external") patch.task_type = "external";
                   if (p?.contract_type === "clt" && task.task_type !== "internal") patch.task_type = "internal";
                   void update(patch);
-                }} disabled={!canEditTask}>
+                }} disabled={!canManageAssignee}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem responsável</SelectItem>
@@ -499,6 +499,10 @@ function TaskDetailPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <UserCog className="h-3.5 w-3.5" />
+                  {canManageAssignee ? "Admin e gestor podem trocar o responsável." : "Somente Admin ou Gestor pode trocar o responsável."}
+                </div>
               </Field>
               <Field label="Tipo">
                 <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEditTask}>
@@ -594,6 +598,27 @@ function TaskDetailPage() {
         defaultProjectId={task.project_id ?? undefined}
         onCreated={() => void load()}
       />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação remove a tarefa atual. Use apenas quando tiver certeza.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void handleDeleteTask()}
+              disabled={deletingTask}
+            >
+              {deletingTask ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
