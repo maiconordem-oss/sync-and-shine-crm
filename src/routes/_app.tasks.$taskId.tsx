@@ -64,6 +64,7 @@ interface TaskFull {
   completed_at: string | null;
   task_type: "internal" | "external";
   service_value: number | null;
+  reference_url: string | null;
 }
 
 export const Route = createFileRoute("/_app/tasks/$taskId")({
@@ -71,8 +72,9 @@ export const Route = createFileRoute("/_app/tasks/$taskId")({
 });
 
 function TaskDetailPage() {
+  const navigate = useNavigate();
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
-  const { user, profile, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
+  const { user, profile, isAdmin, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [taskMissing, setTaskMissing] = useState(false);
@@ -86,6 +88,8 @@ function TaskDetailPage() {
   const [newChecklist, setNewChecklist] = useState("");
   const [createSubOpen, setCreateSubOpen] = useState(false);
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingTask, setDeletingTask] = useState(false);
 
   const load = async () => {
     if (!isAuthenticated) return;
@@ -227,6 +231,30 @@ function TaskDetailPage() {
 
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
   const canEditTask = isManagerOrAdmin || user?.id === task?.created_by || user?.id === task?.assignee_id;
+  const canManageAssignee = isManagerOrAdmin;
+  const canDeleteTask = isAdmin || user?.id === task?.created_by;
+
+  const copyTaskLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link da tarefa copiado!");
+    } catch {
+      toast.error("Não foi possível copiar o link.");
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task) return;
+    setDeletingTask(true);
+    const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+    setDeletingTask(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Tarefa excluída.");
+    void navigate({ to: "/tasks" });
+  };
 
   if (pageLoading || loading) return <div className="p-6 text-muted-foreground">Carregando tarefa...</div>;
 
