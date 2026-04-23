@@ -46,8 +46,10 @@ export const Route = createFileRoute("/_app/tasks/$taskId")({
 
 function TaskDetailPage() {
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
-  const { user, profile, isManagerOrAdmin } = useAuth();
+  const { user, profile, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
   const [task, setTask] = useState<TaskFull | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [taskMissing, setTaskMissing] = useState(false);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [subtasks, setSubtasks] = useState<TaskFull[]>([]);
@@ -60,6 +62,8 @@ function TaskDetailPage() {
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
 
   const load = async () => {
+    if (!isAuthenticated) return;
+    setPageLoading(true);
     const [t, p, pr, sub, c, ch, te] = await Promise.all([
       supabase.from("tasks").select("*").eq("id", taskId).maybeSingle(),
       supabase.from("profiles").select("id,full_name,contract_type"),
@@ -69,7 +73,13 @@ function TaskDetailPage() {
       supabase.from("checklists").select("*").eq("task_id", taskId).order("position"),
       supabase.from("time_entries").select("*").eq("task_id", taskId).order("started_at", { ascending: false }),
     ]);
+    if (t.error) {
+      toast.error(t.error.message);
+      setPageLoading(false);
+      return;
+    }
     setTask((t.data as TaskFull) ?? null);
+    setTaskMissing(!t.data);
     setProfiles((p.data ?? []) as { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[]);
     setProjects((pr.data ?? []) as { id: string; name: string }[]);
     setSubtasks((sub.data ?? []) as TaskFull[]);
@@ -78,9 +88,17 @@ function TaskDetailPage() {
     setTimeEntries((te.data ?? []) as typeof timeEntries);
     const open = (te.data ?? []).find((x) => x.user_id === user?.id && !x.ended_at);
     setActiveTimer(open?.id ?? null);
+    setPageLoading(false);
   };
 
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [taskId]);
+  useEffect(() => {
+    if (loading) return;
+    if (!isAuthenticated) {
+      setPageLoading(false);
+      return;
+    }
+    void load();
+  }, [taskId, loading, isAuthenticated]);
 
   const update = async (patch: Partial<TaskFull>) => {
     if (!task) return;
@@ -183,7 +201,22 @@ function TaskDetailPage() {
 
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
 
-  if (!task) return <div className="p-6 text-muted-foreground">Carregando...</div>;
+  if (pageLoading || loading) return <div className="p-6 text-muted-foreground">Carregando tarefa...</div>;
+
+  if (taskMissing || !task) {
+    return (
+      <div className="space-y-4 max-w-5xl">
+        <Link to="/tasks" className="inline-flex items-center text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        </Link>
+        <Card>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            Essa tarefa não foi encontrada ou você ainda não tem acesso a ela.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
 

@@ -49,7 +49,7 @@ interface ProfileLite { id: string; full_name: string | null; contract_type?: "c
 interface ProjectLite { id: string; name: string; color: string | null }
 
 function TasksPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, loading, isAuthenticated } = useAuth();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
@@ -59,8 +59,11 @@ function TasksPage() {
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const load = async () => {
+    if (!isAuthenticated) return;
+    setPageLoading(true);
     const [t, p, pr] = await Promise.all([
       supabase.from("tasks").select("*").is("parent_task_id", null).order("position"),
       supabase.from("profiles").select("id,full_name,contract_type"),
@@ -69,11 +72,21 @@ function TasksPage() {
     setTasks((t.data ?? []) as TaskRow[]);
     setProfiles((p.data ?? []) as ProfileLite[]);
     setProjects((pr.data ?? []) as ProjectLite[]);
+    setPageLoading(false);
   };
 
   useEffect(() => {
+    if (loading) return;
+    if (!isAuthenticated) {
+      setPageLoading(false);
+      return;
+    }
     void load();
-  }, []);
+  }, [loading, isAuthenticated]);
+
+  if (pageLoading || loading) {
+    return <div className="p-6 text-muted-foreground">Carregando tarefas...</div>;
+  }
 
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
