@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, FileText, Download, Image as ImageIcon, ClipboardPaste } from "lucide-react";
+import { Trash2, FileText, Download, Image as ImageIcon, ClipboardPaste, Upload } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { formatDateTime } from "@/lib/format";
@@ -34,6 +34,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   const [busy, setBusy] = useState(false);
   const [pasteFocus, setPasteFocus] = useState(false);
   const pasteRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Global paste listener — capture images pasted anywhere on the page
   useEffect(() => {
@@ -136,6 +137,13 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
     setItems((p) => p.filter((x) => x.id !== a.id));
   };
 
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    await upload(files);
+    e.target.value = "";
+  };
+
   const isImage = (m: string | null) => m?.startsWith("image/");
 
   return (
@@ -162,6 +170,27 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
             </div>
             <div>Use Ctrl+V ou Cmd+V para enviar prints e imagens rapidamente.</div>
           </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => void handleFileChange(e)}
+        />
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+          >
+            <Upload className="h-4 w-4" />
+            {busy ? "Enviando..." : "Escolher imagem"}
+          </Button>
         </div>
 
         {items.length > 0 && (
