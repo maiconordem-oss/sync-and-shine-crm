@@ -42,6 +42,7 @@ interface TaskRow {
   due_date: string | null;
   tags: string[] | null;
   created_by: string | null;
+  parent_task_id: string | null;
   position: number;
 }
 
@@ -65,7 +66,7 @@ function TasksPage() {
     if (!isAuthenticated) return;
     setPageLoading(true);
     const [t, p, pr] = await Promise.all([
-      supabase.from("tasks").select("*").is("parent_task_id", null).order("position"),
+      supabase.from("tasks").select("*").order("position"),
       supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name,color").eq("archived", false),
     ]);
@@ -238,6 +239,9 @@ function TasksPage() {
                         <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="font-medium hover:underline">
                           {t.title}
                         </Link>
+                        {t.parent_task_id && (
+                          <div className="mt-1 text-xs text-muted-foreground">Subtarefa</div>
+                        )}
                       </td>
                       <td className="p-3">
                         <Badge variant="outline" className={cn("border", STATUS_COLOR[t.status])}>
@@ -342,6 +346,7 @@ function KanbanCard({
       >
         {task.title}
       </Link>
+      {task.parent_task_id && <div className="text-[11px] text-muted-foreground">Subtarefa</div>}
       <div className="flex items-center gap-1.5 flex-wrap">
         <Badge className={cn("text-[10px] py-0", PRIORITY_COLOR[task.priority])}>{PRIORITY_LABEL[task.priority]}</Badge>
         {proj && (
