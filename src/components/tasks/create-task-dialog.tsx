@@ -88,7 +88,6 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
     const payload = {
       title: trimmedTitle,
       description: description || null,
-      reference_url: referenceUrl.trim() || null,
       project_id: projectId === "none" ? null : projectId,
       assignee_id: assigneeId === "none" ? null : assigneeId,
       priority,
