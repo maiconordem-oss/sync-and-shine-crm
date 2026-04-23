@@ -22,7 +22,6 @@ import {
   Briefcase,
   CreditCard,
   PenSquare,
-  ExternalLink,
   Copy,
   UserCog,
 } from "lucide-react";
@@ -64,7 +63,6 @@ interface TaskFull {
   completed_at: string | null;
   task_type: "internal" | "external";
   service_value: number | null;
-  reference_url: string | null;
 }
 
 export const Route = createFileRoute("/_app/tasks/$taskId")({
@@ -315,7 +313,7 @@ function TaskDetailPage() {
                 disabled={!canEditTask}
               />
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               <Textarea
                 value={task.description ?? ""}
                 onChange={(e) => setTask({ ...task, description: e.target.value })}
@@ -324,30 +322,6 @@ function TaskDetailPage() {
                 rows={5}
                 disabled={!canEditTask}
               />
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Link de referência</div>
-                  <Input
-                    type="url"
-                    value={task.reference_url ?? ""}
-                    onChange={(e) => setTask({ ...task, reference_url: e.target.value })}
-                    onBlur={(e) => void update({ reference_url: e.target.value.trim() || null })}
-                    placeholder="https://..."
-                    disabled={!canEditTask}
-                  />
-                </div>
-                {task.reference_url ? (
-                  <Button type="button" variant="outline" asChild>
-                    <a href={task.reference_url} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-4 w-4" /> Abrir link
-                    </a>
-                  </Button>
-                ) : (
-                  <Button type="button" variant="outline" disabled>
-                    <ExternalLink className="h-4 w-4" /> Sem link
-                  </Button>
-                )}
-              </div>
             </CardContent>
           </Card>
 
