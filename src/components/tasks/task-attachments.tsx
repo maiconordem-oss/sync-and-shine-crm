@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Trash2, FileText, Download, Image as ImageIcon } from "lucide-react";
+import { Trash2, FileText, Download, Image as ImageIcon, ClipboardPaste } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { formatDateTime } from "@/lib/format";
@@ -32,9 +32,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   const [items, setItems] = useState<Attachment[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [pasteFocus, setPasteFocus] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const pasteRef = useRef<HTMLDivElement>(null);
 
   // Global paste listener — capture images pasted anywhere on the page
@@ -110,7 +108,6 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
       }
     }
     setBusy(false);
-    if (inputRef.current) inputRef.current.value = "";
     void load();
   };
 
@@ -128,13 +125,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Anexos</CardTitle>
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
-          <Upload className="h-4 w-4 mr-1" /> {busy ? "Enviando..." : "Enviar"}
-        </Button>
-        <input
-          ref={inputRef} type="file" multiple className="hidden"
-          onChange={(e) => e.target.files && upload(e.target.files)}
-        />
+        <div className="text-xs text-muted-foreground">Cole a imagem direto aqui</div>
       </CardHeader>
       <CardContent>
         <div
@@ -143,15 +134,17 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
           onFocus={() => setPasteFocus(true)}
           onBlur={() => setPasteFocus(false)}
           onClick={() => pasteRef.current?.focus()}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault(); setDragOver(false);
-            if (e.dataTransfer.files.length) void upload(e.dataTransfer.files);
-          }}
-          className={`rounded-md border-2 border-dashed p-4 text-center text-sm text-muted-foreground transition-colors cursor-pointer outline-none ${dragOver || pasteFocus ? "border-primary bg-primary/5" : "border-muted"}`}
+          className={`rounded-md border-2 border-dashed p-5 text-center text-sm text-muted-foreground transition-colors cursor-pointer outline-none ${pasteFocus ? "border-primary bg-primary/5" : "border-muted"}`}
         >
-          {pasteFocus ? "Pronto! Pressione Ctrl+V (ou Cmd+V) para colar" : "Arraste, cole (Ctrl+V) ou clique para enviar arquivos (máx. 20MB)"}
+          <div className="flex flex-col items-center gap-2">
+            <div className="grid h-10 w-10 place-items-center rounded-md border bg-background text-primary">
+              <ClipboardPaste className="h-5 w-5" />
+            </div>
+            <div className="font-medium text-foreground">
+              {pasteFocus ? "Pronto para colar a imagem" : "Clique aqui e cole a imagem"}
+            </div>
+            <div>Use Ctrl+V ou Cmd+V para enviar prints e imagens rapidamente.</div>
+          </div>
         </div>
 
         {items.length > 0 && (
