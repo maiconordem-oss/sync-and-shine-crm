@@ -84,10 +84,6 @@ function TasksPage() {
     void load();
   }, [loading, isAuthenticated]);
 
-  if (pageLoading || loading) {
-    return <div className="p-6 text-muted-foreground">Carregando tarefas...</div>;
-  }
-
   const filtered = useMemo(() => {
     return tasks.filter((t) => {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -102,6 +98,10 @@ function TasksPage() {
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  if (pageLoading || loading) {
+    return <div className="p-6 text-muted-foreground">Carregando tarefas...</div>;
+  }
 
   const onDragEnd = async (e: DragEndEvent) => {
     if (!e.over) return;
