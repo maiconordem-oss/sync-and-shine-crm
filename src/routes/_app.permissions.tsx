@@ -58,26 +58,24 @@ function PermissionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.from("role_permissions" as never) as any)
-        .select("*").order("role").order("permission");
-      if (error) {
-        // Table doesn't exist — use defaults
-        setTableReady(false);
-        const defaultPerms: RolePerm[] = [];
-        for (const [role, keys] of Object.entries(DEFAULT_ENABLED)) {
-          for (const p of PERMISSIONS) {
-            defaultPerms.push({ id: `${role}:${p.key}`, role, permission: p.key, enabled: keys.includes(p.key) });
-          }
-        }
-        setPerms(defaultPerms);
-      } else {
-        setTableReady(true);
-        setPerms((data ?? []) as unknown as RolePerm[]);
-      }
-    } catch {
+    const { data, error } = await supabase
+      .from("role_permissions")
+      .select("*")
+      .order("role")
+      .order("permission");
+    if (error) {
+      console.error("[permissions] load error:", error);
       setTableReady(false);
+      const defaultPerms: RolePerm[] = [];
+      for (const [role, keys] of Object.entries(DEFAULT_ENABLED)) {
+        for (const p of PERMISSIONS) {
+          defaultPerms.push({ id: `${role}:${p.key}`, role, permission: p.key, enabled: keys.includes(p.key) });
+        }
+      }
+      setPerms(defaultPerms);
+    } else {
+      setTableReady(true);
+      setPerms((data ?? []) as RolePerm[]);
     }
     setLoading(false);
   }, []);
@@ -101,24 +99,16 @@ function PermissionsPage() {
 
   const toggle = async (role: string, permission: string, currentEnabled: boolean) => {
     if (role === "admin") { toast.error("Permissões do Admin não podem ser alteradas."); return; }
-    if (!tableReady) { toast.error("Execute a migration antes de alterar permissões."); return; }
+    if (!tableReady) { toast.error("Tabela de permissões indisponível."); return; }
     const key = `${role}:${permission}`;
     setSaving(key);
     const existing = getPerm(role, permission);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const db = supabase.from("role_permissions" as never) as any;
-      const { error } = existing
-        ? await db.update({ enabled: !currentEnabled, updated_at: new Date().toISOString() }).eq("id", existing.id)
-        : await db.insert([{ role, permission, enabled: !currentEnabled }]);
-      if (error) { toast.error(error.message); setSaving(null); return; }
-      setPerms((prev) => prev.map((p) =>
-        p.role === role && p.permission === permission ? { ...p, enabled: !currentEnabled } : p
-      ));
-      toast.success(`${!currentEnabled ? "✓ Ativado" : "✗ Desativado"}: ${role} → ${permission}`);
-    } catch (e) {
-      toast.error(String(e));
-    }
+    const { error } = existing && !existing.id.includes(":")
+      ? await supabase.from("role_permissions").update({ enabled: !currentEnabled, updated_at: new Date().toISOString() }).eq("id", existing.id)
+      : await supabase.from("role_permissions").upsert([{ role, permission, enabled: !currentEnabled }], { onConflict: "role,permission" });
+    if (error) { toast.error(error.message); setSaving(null); return; }
+    await load();
+    toast.success(`${!currentEnabled ? "✓ Ativado" : "✗ Desativado"}: ${role} → ${permission}`);
     setSaving(null);
   };
 
