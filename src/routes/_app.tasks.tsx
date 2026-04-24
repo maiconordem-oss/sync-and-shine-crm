@@ -15,7 +15,7 @@ import {
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
   FolderKanban, AlertTriangle, Edit3, ExternalLink, Filter,
   MoreHorizontal, ChevronRight, MessageSquare, ClipboardCheck,
-  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle,
+  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle, CalendarDays, ChevronLeft,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDate, formatDateTime, isOverdue, formatBRL } from "@/lib/format";
@@ -121,7 +121,7 @@ function TasksPage() {
   const { user, profile, loading, isAuthenticated, isManagerOrAdmin, canCreateTasks } = useAuth();
   const { play: playSound } = useSound();
   const navigate = useNavigate();
-  const [view, setView] = useState<"kanban" | "list">("kanban");
+  const [view, setView] = useState<"kanban" | "list" | "calendar">("kanban");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [projects, setProjects] = useState<ProjectLite[]>([]);
@@ -329,6 +329,9 @@ function TasksPage() {
             <Button variant={view === "list" ? "secondary" : "ghost"} size="sm" onClick={() => setView("list")}>
               <ListIcon className="h-4 w-4 mr-1" /> Lista
             </Button>
+            <Button variant={view === "calendar" ? "secondary" : "ghost"} size="sm" onClick={() => setView("calendar")}>
+              <CalendarDays className="h-4 w-4 mr-1" /> Calendário
+            </Button>
           </div>
           {isManagerOrAdmin && (
             <Button variant="outline" size="sm" onClick={() => setShowTemplatesManager(true)}>
@@ -422,7 +425,7 @@ function TasksPage() {
                 ))}
               </div>
             </DndContext>
-          ) : (
+          ) : view === "list" ? (
             <TaskListView
               tasks={filtered}
               profileById={profileById}
@@ -433,6 +436,14 @@ function TasksPage() {
               onDelete={deleteTask}
               isManagerOrAdmin={isManagerOrAdmin}
               navigate={navigate}
+            />
+          ) : (
+            <TaskCalendarView
+              tasks={filtered}
+              profileById={profileById}
+              onOpenPanel={setPanelTaskId}
+              isManagerOrAdmin={isManagerOrAdmin}
+              onTaskUpdate={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
             />
           )}
         </div>
@@ -968,6 +979,221 @@ function TaskListView({
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+// ─── Calendar View ────────────────────────────────────────────────────────────
+
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const PRIORITY_STRIPE: Record<TaskPriority, string> = {
+  low: "bg-slate-200 text-slate-700",
+  medium: "bg-blue-100 text-blue-800",
+  high: "bg-amber-100 text-amber-800",
+  urgent: "bg-rose-100 text-rose-800",
+};
+
+function TaskCalendarView({
+  tasks, profileById, onOpenPanel, isManagerOrAdmin, onTaskUpdate,
+}: {
+  tasks: TaskRow[];
+  profileById: (id: string | null) => ProfileLite | undefined;
+  onOpenPanel: (id: string) => void;
+  isManagerOrAdmin: boolean;
+  onTaskUpdate: (t: TaskRow) => void;
+}) {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const tasksByDay = (day: number) =>
+    tasks.filter((t) => t.due_date && new Date(t.due_date).getDate() === day
+      && new Date(t.due_date).getMonth() === month
+      && new Date(t.due_date).getFullYear() === year);
+
+  const handleDrop = async (day: number) => {
+    if (!draggingId || !isManagerOrAdmin) return;
+    const date = new Date(year, month, day, 12, 0, 0);
+    const { data, error } = await supabase.from("tasks").update({ due_date: date.toISOString() }).eq("id", draggingId).select().single();
+    if (error) { toast.error(error.message); return; }
+    onTaskUpdate(data as TaskRow);
+    toast.success("Prazo atualizado!");
+    setDraggingId(null);
+  };
+
+  const isToday = (day: number) =>
+    day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  const overdue = (t: TaskRow, day: number) =>
+    t.status !== "done" && new Date(year, month, day) < today && !isToday(day);
+
+  const selectedTasks = selectedDay ? tasksByDay(selectedDay) : [];
+  const tasksWithDueDate = tasks.filter((t) => t.due_date).length;
+
+  return (
+    <div className="flex gap-4 h-full min-h-0">
+      {/* Calendar grid */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Month navigation */}
+        <div className="flex items-center justify-between mb-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={prevMonth}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-semibold min-w-[160px] text-center">
+              {MONTHS[month]} {year}
+            </span>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={nextMonth}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>
+            Hoje
+          </Button>
+        </div>
+
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 shrink-0">
+          {WEEKDAYS.map((d) => (
+            <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1.5">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Days grid */}
+        <div className="grid grid-cols-7 gap-px bg-border rounded-xl overflow-hidden flex-1 min-h-0">
+          {cells.map((day, i) => {
+            const dayTasks = day ? tasksByDay(day) : [];
+            const isSelected = day === selectedDay;
+            return (
+              <div
+                key={i}
+                onDragOver={(e) => day && e.preventDefault()}
+                onDrop={() => day && void handleDrop(day)}
+                onClick={() => day && setSelectedDay(day === selectedDay ? null : day)}
+                className={cn(
+                  "bg-background p-1 min-h-[80px] cursor-pointer transition-colors overflow-hidden",
+                  !day && "bg-muted/20 cursor-default",
+                  day && "hover:bg-muted/20",
+                  isSelected && "ring-2 ring-primary ring-inset bg-primary/5",
+                )}
+              >
+                {day && (
+                  <>
+                    <div className={cn(
+                      "h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium mb-1",
+                      isToday(day) ? "bg-primary text-primary-foreground" : "text-foreground",
+                    )}>
+                      {day}
+                    </div>
+                    <div className="space-y-0.5">
+                      {dayTasks.slice(0, 3).map((t) => (
+                        <div
+                          key={t.id}
+                          draggable={isManagerOrAdmin}
+                          onDragStart={(e) => { e.stopPropagation(); setDraggingId(t.id); }}
+                          onDragEnd={() => setDraggingId(null)}
+                          onClick={(e) => { e.stopPropagation(); onOpenPanel(t.id); }}
+                          className={cn(
+                            "text-[10px] rounded px-1 py-0.5 truncate cursor-pointer hover:opacity-80 transition-opacity",
+                            PRIORITY_STRIPE[t.priority],
+                            overdue(t, day) && "ring-1 ring-rose-400",
+                            draggingId === t.id && "opacity-40",
+                          )}
+                          title={t.title}
+                        >
+                          {overdue(t, day) && "⚠ "}{t.title}
+                        </div>
+                      ))}
+                      {dayTasks.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1 font-medium">
+                          +{dayTasks.length - 3} mais
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {tasksWithDueDate === 0 && (
+          <div className="text-center text-sm text-muted-foreground mt-4">
+            <CalendarDays className="h-6 w-6 mx-auto mb-1 opacity-30" />
+            Nenhuma tarefa tem prazo definido neste mês.
+          </div>
+        )}
+      </div>
+
+      {/* Day detail sidebar */}
+      {selectedDay && (
+        <div className="w-64 shrink-0 border rounded-xl bg-background flex flex-col overflow-hidden">
+          <div className="p-3 border-b bg-muted/10 shrink-0">
+            <div className="font-semibold text-sm">
+              {selectedDay} de {MONTHS[month]}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {selectedTasks.length === 0 ? "Nenhuma tarefa" : `${selectedTasks.length} tarefa${selectedTasks.length > 1 ? "s" : ""} com prazo`}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {selectedTasks.length === 0 && (
+              <div className="text-center py-6 text-muted-foreground text-xs">
+                Clique em outro dia.
+              </div>
+            )}
+            {selectedTasks.map((t) => {
+              const assignee = profileById(t.assignee_id);
+              const isOvd = overdue(t, selectedDay);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onOpenPanel(t.id)}
+                  className="w-full text-left rounded-lg border bg-card p-2.5 hover:border-primary/40 transition-colors"
+                >
+                  <div className="text-xs font-medium leading-snug mb-1.5">{t.title}</div>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge variant="outline" className={cn("text-[10px] px-1 h-4", STATUS_COLOR[t.status])}>
+                      {STATUS_LABEL[t.status]}
+                    </Badge>
+                    <Badge className={cn("text-[10px] px-1 h-4", PRIORITY_COLOR[t.priority])}>
+                      {PRIORITY_LABEL[t.priority]}
+                    </Badge>
+                  </div>
+                  {assignee && (
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <Avatar className="h-4 w-4"><AvatarFallback className="text-[8px]">{initials(assignee.full_name)}</AvatarFallback></Avatar>
+                      <span className="text-[11px] text-muted-foreground truncate">{assignee.full_name}</span>
+                    </div>
+                  )}
+                  {isOvd && (
+                    <div className="text-[11px] text-rose-600 font-medium mt-1 flex items-center gap-0.5">
+                      <AlertTriangle className="h-3 w-3" /> Atrasada
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
