@@ -21,6 +21,7 @@ import { Route as AppMembersRouteImport } from './routes/_app.members'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppAutomationsRouteImport } from './routes/_app.automations'
+import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app.tasks.$taskId'
 
 const AuthRoute = AuthRouteImport.update({
@@ -82,6 +83,11 @@ const AppAutomationsRoute = AppAutomationsRouteImport.update({
   path: '/automations',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChatRoute = AppChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTasksTaskIdRoute = AppTasksTaskIdRouteImport.update({
   id: '/$taskId',
   path: '/$taskId',
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/payments': typeof AppPaymentsRoute
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
+  '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -113,6 +120,7 @@ export interface FileRoutesByTo {
   '/payments': typeof AppPaymentsRoute
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
+  '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -268,6 +276,13 @@ declare module '@tanstack/react-router' {
       path: '/automations'
       fullPath: '/automations'
       preLoaderRoute: typeof AppAutomationsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/chat': {
+      id: '/_app/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AppChatRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/tasks/$taskId': {
