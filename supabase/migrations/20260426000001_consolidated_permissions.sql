@@ -19,11 +19,11 @@ DROP POLICY IF EXISTS "tasks select"                     ON public.tasks;
 CREATE POLICY "tasks_rls_v3" ON public.tasks
   FOR SELECT TO authenticated
   USING (
-    -- Admin e Gestor: veem tudo
-    public.is_admin_or_manager(auth.uid())
-    -- Responsável: sempre vê suas tarefas
+    -- Admin: vê tudo
+    EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin')
+    -- Responsável: sempre vê suas tarefas (gestor, CLT e PJ)
     OR assignee_id = auth.uid()
-    -- Criador: sempre vê o que criou
+    -- Criador: sempre vê o que criou (gestor, CLT)
     OR created_by = auth.uid()
   );
 
