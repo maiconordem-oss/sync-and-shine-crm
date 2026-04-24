@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_app/tasks")({
   component: TasksPage,
 });
 
-type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred" | "awaiting_approval";
+type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "waiting" | "awaiting_approval";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskRow {
@@ -616,14 +616,14 @@ function TasksPage() {
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
+const STATUS_COLORS: Record<string, string> = {
   new: "bg-slate-400",
   in_progress: "bg-blue-500",
-  waiting: "bg-amber-400",
   in_review: "bg-purple-500",
   done: "bg-emerald-500",
   deferred: "bg-neutral-400",
-  awaiting_approval: "bg-orange-400",
+  waiting: "bg-amber-400",
+  awaiting_approval: "bg-purple-500",
 };
 
 function KanbanColumn({
@@ -1515,35 +1515,67 @@ function TaskSidePanel({
               <Play className="h-3 w-3" /> Timer
             </button>
           )}
-          {/* Approval buttons */}
-          {task.status !== "awaiting_approval" && task.status !== "done" && user?.id === task.assignee_id && (
+          {/* ── Botões de fluxo ── */}
+          {/* Responsável: Nova → iniciar */}
+          {task.status === "new" && user?.id === task.assignee_id && (
             <button
-              onClick={() => void update({ status: "awaiting_approval" as TaskStatus })}
-              className="flex items-center gap-1 text-xs bg-orange-100 text-orange-700 rounded-md px-2 py-1 hover:bg-orange-200 font-medium"
+              onClick={() => void update({ status: "in_progress" as TaskStatus })}
+              className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-200 font-medium"
+            >
+              <Play className="h-3 w-3" /> Iniciar tarefa
+            </button>
+          )}
+          {/* Responsável: Em andamento → enviar para revisão */}
+          {task.status === "in_progress" && user?.id === task.assignee_id && (
+            <button
+              onClick={() => void update({ status: "in_review" as TaskStatus })}
+              className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 rounded-md px-2 py-1 hover:bg-purple-200 font-medium"
             >
               <CheckCircle2 className="h-3 w-3" /> Enviar para revisão
             </button>
           )}
-          {task.status === "awaiting_approval" && isManagerOrAdmin && (
+          {/* Criador/Gestor: Em revisão → aprovar ou devolver */}
+          {task.status === "in_review" && (user?.id === task.created_by || isManagerOrAdmin) && (
             <div className="flex gap-1">
               <button
                 onClick={async () => {
                   await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
-                  toast.success("Tarefa aprovada!");
+                  // Se tarefa PJ, criar pagamento automaticamente
+                  if (task.task_type === "external" && task.service_value && task.assignee_id) {
+                    const { data: existing } = await supabase.from("payments")
+                      .select("id").eq("task_id", task.id).eq("status", "pending").maybeSingle();
+                    if (!existing) {
+                      await supabase.from("payments").insert([{
+                        description: `Pagamento ref. tarefa: ${task.title}`,
+                        amount: task.service_value,
+                        beneficiary_user_id: task.assignee_id,
+                        status: "pending",
+                        due_date: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
+                        task_id: task.id,
+                        project_id: task.project_id,
+                        created_by: user?.id ?? null,
+                      }]);
+                      toast.success("✅ Tarefa concluída! Pagamento PJ registrado automaticamente.");
+                    } else {
+                      toast.success("✅ Tarefa concluída!");
+                    }
+                  } else {
+                    toast.success("✅ Tarefa concluída e aprovada!");
+                  }
                 }}
                 className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 rounded-md px-2 py-1 hover:bg-emerald-200 font-medium"
               >
-                <CheckCircle2 className="h-3 w-3" /> Aprovar
+                <CheckCircle2 className="h-3 w-3" /> Aprovar e concluir
               </button>
               <button
                 onClick={async () => {
                   const note = window.prompt("Motivo da devolução (opcional):");
-                  await update({ status: "in_review" as TaskStatus, returned_at: new Date().toISOString(), return_note: note ?? null });
-                  toast.success("Tarefa devolvida para revisão.");
+                  await update({ status: "in_progress" as TaskStatus, returned_at: new Date().toISOString(), return_note: note ?? null });
+                  toast.success("Tarefa devolvida para edição.");
                 }}
                 className="flex items-center gap-1 text-xs bg-rose-100 text-rose-700 rounded-md px-2 py-1 hover:bg-rose-200 font-medium"
               >
-                <XCircle className="h-3 w-3" /> Devolver
+                <XCircle className="h-3 w-3" /> Devolver para edição
               </button>
             </div>
           )}
@@ -1565,24 +1597,55 @@ function TaskSidePanel({
         {/* ── LEFT PANEL ──────────────────────────────────────── */}
         <div className="w-[320px] shrink-0 border-r flex flex-col overflow-hidden">
 
-          {/* Status + priority badges */}
-          <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-2 border-b shrink-0">
-            <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })} disabled={!canEdit}>
-              <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1", STATUS_COLOR[task.status])}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })} disabled={!canEdit}>
-              <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1", PRIORITY_COLOR[task.priority])}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {/* Flow steps indicator */}
+          <div className="px-3 pt-2 pb-2 border-b shrink-0 space-y-2">
+            {/* Step pills */}
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {(["new", "in_progress", "in_review", "done"] as const).map((s, i) => {
+                const steps = ["new", "in_progress", "in_review", "done"];
+                const currentIdx = steps.indexOf(["waiting","awaiting_approval"].includes(task.status) ? "in_review" : task.status);
+                const stepIdx = steps.indexOf(s);
+                const isDone = stepIdx < currentIdx;
+                const isCurrent = stepIdx === currentIdx;
+                return (
+                  <div key={s} className="flex items-center gap-1 shrink-0">
+                    <div className={cn(
+                      "text-[10px] px-2 py-0.5 rounded-full font-medium transition-all",
+                      isCurrent ? "bg-primary text-primary-foreground shadow-sm" :
+                      isDone ? "bg-emerald-100 text-emerald-700" :
+                      "bg-muted text-muted-foreground"
+                    )}>
+                      {isDone ? "✓ " : ""}{STATUS_LABEL[s]}
+                    </div>
+                    {i < 3 && <div className="h-px w-3 bg-border shrink-0" />}
+                  </div>
+                );
+              })}
+              {task.status === "deferred" && (
+                <div className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-neutral-100 text-neutral-600 ml-1">Adiada</div>
+              )}
+            </div>
+            {/* Priority + status selects in compact row */}
+            <div className="flex flex-wrap gap-1.5">
+              <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })} disabled={!canEdit}>
+                <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1 bg-muted/40 rounded-md", STATUS_COLOR[task.status])}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["new","in_progress","in_review","done","deferred"] as const).map((k) => (
+                    <SelectItem key={k} value={k} className="text-xs">{STATUS_LABEL[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })} disabled={!canEdit}>
+                <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1 bg-muted/40 rounded-md", PRIORITY_COLOR[task.priority])}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             {task.task_type === "external" && (
               <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 h-6">
                 PJ{task.service_value ? ` · ${formatBRL(task.service_value)}` : ""}
