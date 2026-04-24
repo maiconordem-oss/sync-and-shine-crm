@@ -205,6 +205,51 @@ export type Database = {
           },
         ]
       }
+      monthly_closures: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          paid_at: string | null
+          pj_user_id: string
+          reference_month: string
+          status: string
+          tasks_count: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          pj_user_id: string
+          reference_month: string
+          status?: string
+          tasks_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          pj_user_id?: string
+          reference_month?: string
+          status?: string
+          tasks_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
