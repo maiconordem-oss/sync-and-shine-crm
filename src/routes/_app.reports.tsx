@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { STATUS_LABEL } from "@/lib/labels";
 
 export const Route = createFileRoute("/_app/reports")({
   component: ReportsPage,
@@ -287,16 +288,17 @@ function AdminView() {
   const rows = useMemo<PJRow[]>(() => pjs.map((pj) => {
     const pjPayments = payments.filter((p) => p.beneficiary_user_id === pj.id);
     const pjTasks = tasks.filter((t) => t.assignee_id === pj.id);
-    const totalPending = pjPayments.filter((p) => p.status === "pending").reduce((s, p) => s + Number(p.amount), 0);
-    const totalPaid = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+    const paidFromPayments = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
     const completedTasks = pjTasks.length;
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
     const sumValues = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
     const avgPerTask = tasksWithValue.length > 0 ? sumValues / tasksWithValue.length : 0;
-    // totalToPay = payments OR task service_values (whichever is greater / more complete)
-    // If payments exist and sum > 0, use them; otherwise use task service_values
-    const paymentTotal = totalPending + totalPaid;
-    const totalToPay = paymentTotal > 0 ? paymentTotal : sumValues;
+    // Total to pay = sum of task service_values
+    const totalToPay = sumValues;
+    // Paid = whatever was already marked paid in payments table
+    const totalPaid = paidFromPayments;
+    // Pending = total to pay minus what's already paid
+    const totalPending = Math.max(0, totalToPay - totalPaid);
     const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
     return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure };
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures]);
@@ -304,8 +306,9 @@ function AdminView() {
   const grandTotals = useMemo(() => rows.reduce((acc, r) => ({
     pending: acc.pending + r.totalPending,
     paid: acc.paid + r.totalPaid,
+    total: (acc.total ?? 0) + r.totalToPay,
     tasks: acc.tasks + r.completedTasks,
-  }), { pending: 0, paid: 0, tasks: 0 }), [rows]);
+  }), { pending: 0, paid: 0, total: 0, tasks: 0 }), [rows]);
 
   const closeClosure = async (pjId: string, totalAmount: number, tasksCount: number) => {
     if (!user) return;
@@ -384,6 +387,7 @@ function AdminView() {
         <KpiCard icon={Wallet} label="A pagar (pendente)" value={formatBRL(grandTotals.pending)} accent="text-amber-700" />
         <KpiCard icon={CheckCircle2} label="Pago no mês" value={formatBRL(grandTotals.paid)} accent="text-emerald-700" />
         <KpiCard icon={TrendingUp} label="Tarefas concluídas" value={String(grandTotals.tasks)} />
+        <KpiCard icon={BarChart3} label="Total do período" value={formatBRL(grandTotals.total ?? 0)} />
       </div>
 
       {/* Per-PJ table */}
@@ -413,14 +417,30 @@ function AdminView() {
                   onClose={() => closeClosure(r.pj.id, r.totalToPay, r.completedTasks)}
                   onMarkPaid={() => markPaid(r.pj.id)}
                   onReopen={() => reopenClosure(r.pj.id)}
+                  userId={user?.id ?? null}
                 />
               ))}
               {/* Grand total row */}
-              <div className="border-t bg-muted/20 flex items-center justify-end gap-8 px-4 py-3 text-sm font-semibold">
-                <span className="text-muted-foreground mr-auto">Total geral</span>
-                <span className="text-amber-700">{formatBRL(grandTotals.pending)}</span>
-                <span className="text-emerald-700">{formatBRL(grandTotals.paid)}</span>
-                <span>{formatBRL(grandTotals.pending + grandTotals.paid)}</span>
+              <div className="border-t bg-muted/20 flex items-center px-4 py-3 text-sm font-semibold">
+                <span className="text-muted-foreground flex-1">Total geral</span>
+                <div className="hidden sm:flex items-center gap-8 shrink-0">
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground font-normal">Tarefas</div>
+                    <div>{grandTotals.tasks}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground font-normal">Pendente</div>
+                    <div className="text-amber-700">{formatBRL(grandTotals.pending)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground font-normal">Pago</div>
+                    <div className="text-emerald-700">{formatBRL(grandTotals.paid)}</div>
+                  </div>
+                  <div className="text-right min-w-[80px]">
+                    <div className="text-xs text-muted-foreground font-normal">Total</div>
+                    <div>{formatBRL(grandTotals.total ?? 0)}</div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -431,7 +451,7 @@ function AdminView() {
 }
 
 function PJRow({
-  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen,
+  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId,
 }: {
   row: PJRow;
   expanded: boolean;
@@ -442,6 +462,7 @@ function PJRow({
   onClose: () => void;
   onMarkPaid: () => void;
   onReopen: () => void;
+  userId: string | null;
 }) {
   const { closure } = row;
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
@@ -485,40 +506,97 @@ function PJRow({
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t bg-muted/10 p-4 space-y-4">
-          {/* Tasks list */}
-          {row.tasks.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-muted-foreground mb-2">Tarefas concluídas no mês</div>
-              <div className="space-y-1">
-                {row.tasks.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                    <span className="text-sm">{t.title}</span>
-                    <span className="font-medium shrink-0 ml-4">{t.service_value ? formatBRL(t.service_value) : "—"}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Payments list */}
-          {row.payments.length > 0 && (
+          {/* Tasks — rich cards */}
+          {row.tasks.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              Nenhuma tarefa externa concluída neste mês.
+            </div>
+          ) : (
             <div>
-              <div className="text-xs font-medium text-muted-foreground mb-2">Pagamentos do período</div>
-              <div className="space-y-1">
-                {row.payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                    <span className="truncate flex-1">{p.description}</span>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                      <span className="font-medium">{formatBRL(p.amount)}</span>
-                      <Badge className={cn("text-[10px] px-1.5 h-4", {
-                        "bg-amber-100 text-amber-800": p.status === "pending",
-                        "bg-emerald-100 text-emerald-800": p.status === "paid",
-                      })}>
-                        {p.status === "pending" ? "Pendente" : "Pago"}
-                      </Badge>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Tarefas concluídas — {row.tasks.length} tarefa{row.tasks.length !== 1 ? "s" : ""}
+              </div>
+              <div className="space-y-2">
+                {row.tasks.map((t) => {
+                  const taskPayment = row.payments.find((p) => p.task_id === t.id && p.status !== "cancelled");
+                  const isPaidTask = taskPayment?.status === "paid";
+                  const isPendingTask = !isPaidTask;
+                  return (
+                    <div key={t.id} className="rounded-lg border bg-background p-3 space-y-2">
+                      {/* Title + value */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium leading-snug">{t.title}</div>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <Badge variant="outline" className={cn("text-[10px] px-1.5 h-4", {
+                              "border-emerald-300 text-emerald-700": t.status === "done",
+                              "border-amber-300 text-amber-700": t.status === "awaiting_approval",
+                            })}>
+                              {STATUS_LABEL[t.status] ?? t.status}
+                            </Badge>
+                            {t.completed_at && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Concluída em {new Date(t.completed_at).toLocaleDateString("pt-BR")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-base font-bold">
+                            {t.service_value ? formatBRL(t.service_value) : "—"}
+                          </div>
+                          <Badge className={cn("text-[10px] px-1.5 h-4 mt-0.5", isPaidTask
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                          )}>
+                            {isPaidTask ? "✓ Pago" : "⏳ Pendente"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Payment action if pending */}
+                      {isPendingTask && t.service_value && !isPaid && (
+                        <div className="flex items-center justify-between pt-1 border-t border-dashed">
+                          <span className="text-xs text-muted-foreground">
+                            {taskPayment
+                              ? `Pagamento registrado em ${formatDate(taskPayment.due_date)}`
+                              : "Nenhum pagamento registrado para esta tarefa"}
+                          </span>
+                          {!isClosed && (
+                            <button
+                              onClick={async () => {
+                                if (!taskPayment) {
+                                  // Create payment if it doesn't exist
+                                  await supabase.from("payments").insert([{
+                                    description: `Pagamento ref. tarefa: ${t.title}`,
+                                    amount: Number(t.service_value),
+                                    beneficiary_user_id: row.pj.id,
+                                    beneficiary_name: row.pj.full_name,
+                                    status: "pending",
+                                    due_date: new Date().toISOString().slice(0, 10),
+                                    task_id: t.id,
+                                    created_by: userId,
+                                  }]);
+                                }
+                                onMarkPaid();
+                              }}
+                              className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="h-3 w-3" /> Marcar como pago
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {isPaidTask && taskPayment?.paid_date && (
+                        <div className="text-[11px] text-emerald-700 pt-1 border-t border-dashed">
+                          Pago em {new Date(taskPayment.paid_date).toLocaleDateString("pt-BR")}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
