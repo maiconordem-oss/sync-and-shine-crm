@@ -127,7 +127,7 @@ function AppLayout() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <SoundToggle />
+              <SoundToggleBtn />
           <Link to="/notifications" className="relative">
                 <Button variant="ghost" size="icon" className="rounded-md">
                   <Bell className="h-4 w-4" />
