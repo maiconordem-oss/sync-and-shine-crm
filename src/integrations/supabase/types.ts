@@ -138,6 +138,27 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          author_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       checklists: {
         Row: {
           created_at: string
@@ -375,6 +396,7 @@ export type Database = {
           full_name: string | null
           id: string
           job_title: string | null
+          sound_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -385,6 +407,7 @@ export type Database = {
           full_name?: string | null
           id: string
           job_title?: string | null
+          sound_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -395,6 +418,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           job_title?: string | null
+          sound_enabled?: boolean
           updated_at?: string
         }
         Relationships: []

@@ -1,4 +1,4 @@
-import { MessageSquare, createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import {
   LayoutDashboard,
@@ -12,6 +12,8 @@ import {
   LogOut,
   CheckCircle2,
   Bell,
+  Volume2,
+  VolumeX,
   Search,
   PanelLeftClose,
 } from "lucide-react";
@@ -127,7 +129,7 @@ function AppLayout() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <SoundToggle />
+              <SoundToggleBtn />
           <Link to="/notifications" className="relative">
                 <Button variant="ghost" size="icon" className="rounded-md">
                   <Bell className="h-4 w-4" />
@@ -248,5 +250,20 @@ function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+function SoundToggleBtn() {
+  const { soundEnabled, setSoundEnabled } = useAuth();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="rounded-md"
+      onClick={() => void setSoundEnabled(!soundEnabled)}
+      title={soundEnabled ? "Silenciar sons" : "Ativar sons"}
+    >
+      {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+    </Button>
   );
 }
