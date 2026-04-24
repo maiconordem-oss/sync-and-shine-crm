@@ -58,26 +58,24 @@ function PermissionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.from("role_permissions" as never) as any)
-        .select("*").order("role").order("permission");
-      if (error) {
-        // Table doesn't exist — use defaults
-        setTableReady(false);
-        const defaultPerms: RolePerm[] = [];
-        for (const [role, keys] of Object.entries(DEFAULT_ENABLED)) {
-          for (const p of PERMISSIONS) {
-            defaultPerms.push({ id: `${role}:${p.key}`, role, permission: p.key, enabled: keys.includes(p.key) });
-          }
-        }
-        setPerms(defaultPerms);
-      } else {
-        setTableReady(true);
-        setPerms((data ?? []) as unknown as RolePerm[]);
-      }
-    } catch {
+    const { data, error } = await supabase
+      .from("role_permissions")
+      .select("*")
+      .order("role")
+      .order("permission");
+    if (error) {
+      console.error("[permissions] load error:", error);
       setTableReady(false);
+      const defaultPerms: RolePerm[] = [];
+      for (const [role, keys] of Object.entries(DEFAULT_ENABLED)) {
+        for (const p of PERMISSIONS) {
+          defaultPerms.push({ id: `${role}:${p.key}`, role, permission: p.key, enabled: keys.includes(p.key) });
+        }
+      }
+      setPerms(defaultPerms);
+    } else {
+      setTableReady(true);
+      setPerms((data ?? []) as RolePerm[]);
     }
     setLoading(false);
   }, []);
