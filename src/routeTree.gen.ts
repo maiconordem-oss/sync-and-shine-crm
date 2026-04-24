@@ -20,9 +20,11 @@ import { Route as AppNotificationsRouteImport } from './routes/_app.notification
 import { Route as AppMembersRouteImport } from './routes/_app.members'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppProfileRouteImport } from './_app.profile'
+import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppAutomationsRouteImport } from './routes/_app.automations'
 import { Route as AppProfileRouteImport } from './_app.profile'
+import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app.tasks.$taskId'
 
@@ -80,6 +82,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/_app/calendar',
+  path: '/calendar',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppChatRoute = AppChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -93,6 +100,11 @@ const AppAutomationsRoute = AppAutomationsRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/_app/calendar',
+  path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
 const AppChatRoute = AppChatRouteImport.update({
@@ -118,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/profile': typeof AppProfileRoute
+  '/calendar': typeof AppCalendarRoute
   '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -134,6 +147,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/profile': typeof AppProfileRoute
+  '/calendar': typeof AppCalendarRoute
   '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -145,6 +159,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_app/automations': typeof AppAutomationsRoute
   '/_app/profile': typeof AppProfileRoute
+  '/_app/calendar': typeof AppCalendarRoute
   '/_app/chat': typeof AppChatRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/members': typeof AppMembersRoute
@@ -163,6 +178,8 @@ export interface FileRouteTypes {
     | '/automations'
     | '/profile'
     | '/profile'
+    | '/calendar'
+    | '/calendar'
     | '/chat'
     | '/dashboard'
     | '/members'
@@ -179,6 +196,8 @@ export interface FileRouteTypes {
     | '/automations'
     | '/profile'
     | '/profile'
+    | '/calendar'
+    | '/calendar'
     | '/chat'
     | '/dashboard'
     | '/members'
@@ -195,6 +214,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_app/automations'
     | '/_app/profile'
+    | '/_app/calendar'
     | '/_app/chat'
     | '/_app/dashboard'
     | '/_app/members'
@@ -291,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/calendar': {
+      id: '/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/chat': {
       id: '/_app/chat'
       path: '/chat'
@@ -310,6 +337,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/calendar': {
+      id: '/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/chat': {
@@ -344,6 +378,7 @@ const AppTasksRouteWithChildren = AppTasksRoute._addFileChildren(
 interface AppRouteChildren {
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppCalendarRoute: typeof AppCalendarRoute
   AppChatRoute: typeof AppChatRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppMembersRoute: typeof AppMembersRoute
@@ -357,6 +392,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAutomationsRoute: AppAutomationsRoute,
   AppProfileRoute: AppProfileRoute,
+  AppCalendarRoute: AppCalendarRoute,
   AppChatRoute: AppChatRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppMembersRoute: AppMembersRoute,
