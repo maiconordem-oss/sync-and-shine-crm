@@ -478,6 +478,7 @@ export type Database = {
           default_service_value: number | null
           default_tags: string[] | null
           default_task_type: Database["public"]["Enums"]["task_type"]
+          default_title: string | null
           description: string | null
           id: string
           name: string
@@ -492,6 +493,7 @@ export type Database = {
           default_service_value?: number | null
           default_tags?: string[] | null
           default_task_type?: Database["public"]["Enums"]["task_type"]
+          default_title?: string | null
           description?: string | null
           id?: string
           name: string
@@ -506,6 +508,7 @@ export type Database = {
           default_service_value?: number | null
           default_tags?: string[] | null
           default_task_type?: Database["public"]["Enums"]["task_type"]
+          default_title?: string | null
           description?: string | null
           id?: string
           name?: string
