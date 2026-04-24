@@ -28,7 +28,7 @@ import {
 import { runAutomations } from "@/lib/automations";
 import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
-import { TaskAttachments } from "@/components/tasks/task-attachments";
+import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attachments";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
 import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
 import {
@@ -706,6 +706,7 @@ function KanbanCard({
   const assignee = profileById(task.assignee_id);
   const overdue = isOverdue(task.due_date) && task.status !== "done";
   const style = transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined;
+  const thumbnail = useTaskThumbnail(task.id);
 
   const priorityStripe: Record<TaskPriority, string> = {
     low: "bg-slate-300",
@@ -727,6 +728,18 @@ function KanbanCard({
     >
       {/* Priority stripe */}
       <div className={cn("h-0.5 rounded-t-lg", priorityStripe[task.priority])} />
+
+      {/* Thumbnail */}
+      {thumbnail && (
+        <div className="w-full overflow-hidden bg-muted" style={{ height: "88px" }}>
+          <img
+            src={thumbnail}
+            alt="preview"
+            className="w-full h-full object-cover"
+            onClick={() => onOpenPanel(task.id)}
+          />
+        </div>
+      )}
 
       <div className="p-3" onClick={() => onOpenPanel(task.id)}>
         <div className="flex items-start gap-1.5">

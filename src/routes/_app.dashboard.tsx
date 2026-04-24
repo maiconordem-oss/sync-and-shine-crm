@@ -6,6 +6,7 @@ import { Wallet, ListChecks, AlertTriangle, Workflow } from "lucide-react";
 import { formatBRL, formatDate } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import { Link } from "@tanstack/react-router";
+import { useTaskThumbnail } from "@/components/tasks/task-attachments";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -105,20 +106,38 @@ function DashboardPage() {
           {upcoming.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma tarefa com prazo no momento.</p>
           ) : (
-            <ul className="divide-y">
+            <ul className="space-y-2">
               {upcoming.map((t) => (
-                <li key={t.id} className="py-2 flex items-center justify-between">
-                  <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="hover:underline">
-                    {t.title}
-                  </Link>
-                  <span className="text-sm text-muted-foreground">{formatDate(t.due_date)}</span>
-                </li>
+                <DashTaskRow key={t.id} task={t} />
               ))}
             </ul>
           )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function DashTaskRow({ task }: { task: UpcomingTask }) {
+  const thumb = useTaskThumbnail(task.id);
+  return (
+    <li className="flex items-center gap-3 rounded-lg border bg-card hover:border-primary/30 transition-colors p-2 group">
+      {thumb ? (
+        <div className="h-12 w-16 rounded-md overflow-hidden shrink-0 bg-muted">
+          <img src={thumb} alt={task.title} className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div className="h-12 w-16 rounded-md shrink-0 bg-muted/50 flex items-center justify-center text-muted-foreground/30 text-xs">
+          sem img
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="text-sm font-medium hover:underline truncate block">
+          {task.title}
+        </Link>
+        <span className="text-xs text-muted-foreground">{formatDate(task.due_date)}</span>
+      </div>
+    </li>
   );
 }
 
