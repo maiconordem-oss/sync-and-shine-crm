@@ -9,6 +9,7 @@ import {
   BarChart3,
   Users,
   MessageSquare,
+  CalendarDays,
   LogOut,
   CheckCircle2,
   Bell,
@@ -62,6 +63,7 @@ const NAV: NavItem[] = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/payments", label: "Pagamentos", icon: Wallet },
   { to: "/reports", label: "Relatórios", icon: BarChart3 },
+  { to: "/calendar", label: "Calendário", icon: CalendarDays },
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true },
   { to: "/members", label: "Membros", icon: Users, adminOnly: true },
@@ -188,15 +190,16 @@ function AppLayout() {
                   </span>
                 )}
               </Link>
-              <div className="hidden items-center gap-2 rounded-md border bg-background px-2 py-1.5 md:flex">
+              <Link to="/profile" className="hidden items-center gap-2 rounded-md border bg-background px-2 py-1.5 md:flex hover:border-primary/40 transition-colors" title="Meu perfil">
                 <Avatar className="h-7 w-7">
+                  {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />}
                   <AvatarFallback>{initials(profile?.full_name)}</AvatarFallback>
                 </Avatar>
                 <div className="leading-none">
                   <div className="text-sm font-medium">{profile?.full_name ?? "Usuário"}</div>
                   <div className="text-[11px] text-muted-foreground">{displayRole}</div>
                 </div>
-              </div>
+              </Link>
             </div>
           </header>
 

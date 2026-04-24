@@ -5,9 +5,10 @@ export const STATUS_LABEL: Record<string, string> = {
   in_review: "Em revisão",
   done: "Concluída",
   deferred: "Adiada",
+  awaiting_approval: "Aguardando aprovação",
 };
 
-export const STATUS_ORDER = ["new", "in_progress", "waiting", "in_review", "done", "deferred"] as const;
+export const STATUS_ORDER = ["new", "in_progress", "waiting", "in_review", "awaiting_approval", "done", "deferred"] as const;
 
 export const PRIORITY_LABEL: Record<string, string> = {
   low: "Baixa",
@@ -30,6 +31,7 @@ export const STATUS_COLOR: Record<string, string> = {
   in_review: "bg-purple-50 text-purple-700 border-purple-200",
   done: "bg-emerald-50 text-emerald-700 border-emerald-200",
   deferred: "bg-neutral-100 text-neutral-600 border-neutral-200",
+  awaiting_approval: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {

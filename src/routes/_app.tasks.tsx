@@ -15,7 +15,7 @@ import {
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
   FolderKanban, AlertTriangle, Edit3, ExternalLink, Filter,
   MoreHorizontal, ChevronRight, MessageSquare, ClipboardCheck,
-  Paperclip, Clock, ClipboardList,
+  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDate, formatDateTime, isOverdue, formatBRL } from "@/lib/format";
@@ -29,6 +29,7 @@ import { runAutomations } from "@/lib/automations";
 import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
 import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attachments";
+import { TaskLinks } from "@/components/tasks/task-links";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
 import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
 import {
@@ -1275,6 +1276,38 @@ function TaskSidePanel({
               <Play className="h-3 w-3" /> Timer
             </button>
           )}
+          {/* Approval buttons */}
+          {task.status !== "awaiting_approval" && task.status !== "done" && user?.id === task.assignee_id && (
+            <button
+              onClick={() => void update({ status: "awaiting_approval" as TaskStatus })}
+              className="flex items-center gap-1 text-xs bg-orange-100 text-orange-700 rounded-md px-2 py-1 hover:bg-orange-200 font-medium"
+            >
+              <CheckCircle2 className="h-3 w-3" /> Enviar para revisão
+            </button>
+          )}
+          {task.status === "awaiting_approval" && isManagerOrAdmin && (
+            <div className="flex gap-1">
+              <button
+                onClick={async () => {
+                  await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
+                  toast.success("Tarefa aprovada!");
+                }}
+                className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 rounded-md px-2 py-1 hover:bg-emerald-200 font-medium"
+              >
+                <CheckCircle2 className="h-3 w-3" /> Aprovar
+              </button>
+              <button
+                onClick={async () => {
+                  const note = window.prompt("Motivo da devolução (opcional):");
+                  await update({ status: "in_review" as TaskStatus, returned_at: new Date().toISOString(), return_note: note ?? null });
+                  toast.success("Tarefa devolvida para revisão.");
+                }}
+                className="flex items-center gap-1 text-xs bg-rose-100 text-rose-700 rounded-md px-2 py-1 hover:bg-rose-200 font-medium"
+              >
+                <XCircle className="h-3 w-3" /> Devolver
+              </button>
+            </div>
+          )}
           <button onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })} className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Abrir página completa">
             <ExternalLink className="h-4 w-4" />
           </button>
@@ -1507,6 +1540,14 @@ function TaskSidePanel({
                       <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setAddingSubtask(false); setSubtaskTitle(""); }}><X className="h-3 w-3" /></Button>
                     </div>
                   )}
+                </div>
+
+                {/* Links */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                    <ExternalLink className="h-3 w-3" /> Links
+                  </label>
+                  <TaskLinks taskId={taskId} canEdit={canEdit} />
                 </div>
 
                 {/* Attachments */}
