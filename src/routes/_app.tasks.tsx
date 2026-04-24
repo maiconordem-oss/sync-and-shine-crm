@@ -1535,7 +1535,7 @@ function TaskSidePanel({
             </button>
           )}
           {/* Criador/Gestor: Em revisão → aprovar ou devolver */}
-          {task.status === "in_review" && (user?.id === task.created_by || isManagerOrAdmin) && (
+          {task.status === "in_review" && isManagerOrAdmin && (
             <div className="flex gap-1">
               <button
                 onClick={async () => {

@@ -17,6 +17,8 @@ import {
   VolumeX,
   Search,
   PanelLeftClose,
+  ShieldCheck,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -66,6 +68,7 @@ const NAV: NavItem[] = [
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true },
   { to: "/members", label: "Membros", icon: Users, adminOnly: true },
+  { to: "/permissions", label: "Permissões", icon: ShieldCheck, adminOnly: true },
 ];
 
 function AppLayout() {

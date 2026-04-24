@@ -20,10 +20,12 @@ import { Route as AppNotificationsRouteImport } from './routes/_app.notification
 import { Route as AppMembersRouteImport } from './routes/_app.members'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppProfileRouteImport } from './_app.profile'
+import { Route as AppPermissionsRouteImport } from './routes/_app.permissions'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppAutomationsRouteImport } from './routes/_app.automations'
 import { Route as AppProfileRouteImport } from './_app.profile'
+import { Route as AppPermissionsRouteImport } from './routes/_app.permissions'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
 import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app.tasks.$taskId'
@@ -82,6 +84,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPermissionsRoute = AppPermissionsRouteImport.update({
+  id: '/_app/permissions',
+  path: '/permissions',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCalendarRoute = AppCalendarRouteImport.update({
   id: '/_app/calendar',
   path: '/calendar',
@@ -100,6 +107,11 @@ const AppAutomationsRoute = AppAutomationsRouteImport.update({
 const AppProfileRoute = AppProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPermissionsRoute = AppPermissionsRouteImport.update({
+  id: '/_app/permissions',
+  path: '/permissions',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCalendarRoute = AppCalendarRouteImport.update({
@@ -130,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/profile': typeof AppProfileRoute
+  '/permissions': typeof AppPermissionsRoute
   '/calendar': typeof AppCalendarRoute
   '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
@@ -147,6 +160,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsRoute
   '/reports': typeof AppReportsRoute
   '/profile': typeof AppProfileRoute
+  '/permissions': typeof AppPermissionsRoute
   '/calendar': typeof AppCalendarRoute
   '/chat': typeof AppChatRoute
   '/tasks': typeof AppTasksRouteWithChildren
@@ -159,6 +173,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_app/automations': typeof AppAutomationsRoute
   '/_app/profile': typeof AppProfileRoute
+  '/_app/permissions': typeof AppPermissionsRoute
   '/_app/calendar': typeof AppCalendarRoute
   '/_app/chat': typeof AppChatRoute
   '/_app/dashboard': typeof AppDashboardRoute
@@ -179,6 +194,8 @@ export interface FileRouteTypes {
     | '/profile'
     | '/profile'
     | '/calendar'
+    | '/permissions'
+    | '/permissions'
     | '/calendar'
     | '/chat'
     | '/dashboard'
@@ -197,6 +214,8 @@ export interface FileRouteTypes {
     | '/profile'
     | '/profile'
     | '/calendar'
+    | '/permissions'
+    | '/permissions'
     | '/calendar'
     | '/chat'
     | '/dashboard'
@@ -214,6 +233,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_app/automations'
     | '/_app/profile'
+    | '/_app/permissions'
     | '/_app/calendar'
     | '/_app/chat'
     | '/_app/dashboard'
@@ -311,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/permissions': {
+      id: '/_app/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof AppPermissionsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/calendar': {
       id: '/_app/calendar'
       path: '/calendar'
@@ -337,6 +364,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/permissions': {
+      id: '/_app/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof AppPermissionsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/calendar': {
@@ -378,6 +412,7 @@ const AppTasksRouteWithChildren = AppTasksRoute._addFileChildren(
 interface AppRouteChildren {
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppPermissionsRoute: typeof AppPermissionsRoute
   AppCalendarRoute: typeof AppCalendarRoute
   AppChatRoute: typeof AppChatRoute
   AppDashboardRoute: typeof AppDashboardRoute
@@ -392,6 +427,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAutomationsRoute: AppAutomationsRoute,
   AppProfileRoute: AppProfileRoute,
+  AppPermissionsRoute: AppPermissionsRoute,
   AppCalendarRoute: AppCalendarRoute,
   AppChatRoute: AppChatRoute,
   AppDashboardRoute: AppDashboardRoute,
