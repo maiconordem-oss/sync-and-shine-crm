@@ -58,7 +58,7 @@ const NAV: NavItem[] = [
   { to: "/tasks", label: "Tarefas", icon: KanbanSquare },
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/payments", label: "Pagamentos", icon: Wallet },
-  { to: "/reports", label: "Relatórios", icon: BarChart3, managerOnly: true },
+  { to: "/reports", label: "Relatórios", icon: BarChart3 },
   { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true },
   { to: "/members", label: "Membros", icon: Users, adminOnly: true },
 ];

@@ -15,7 +15,7 @@ import {
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
   FolderKanban, AlertTriangle, Edit3, ExternalLink, Filter,
   MoreHorizontal, ChevronRight, MessageSquare, ClipboardCheck,
-  Paperclip, Clock,
+  Paperclip, Clock, ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDate, formatDateTime, isOverdue, formatBRL } from "@/lib/format";
@@ -28,6 +28,8 @@ import {
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
+import { TaskBodyImages } from "@/components/tasks/task-body-images";
+import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -137,6 +139,9 @@ function TasksPage() {
   const [newType, setNewType] = useState<"internal" | "external">("internal");
   const [newValue, setNewValue] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
+  const [newBodyImages, setNewBodyImages] = useState<{ url: string; path: string; name: string }[]>([]);
+  const [newChecklistItems, setNewChecklistItems] = useState<string[]>([]);
+  const [showTemplatesManager, setShowTemplatesManager] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -231,16 +236,52 @@ function TasksPage() {
     const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
     setCreateBusy(false);
     if (error) { toast.error(error.message); return; }
+    const createdTask = data as TaskRow;
+
+    // Create checklist items from template
+    if (newChecklistItems.length > 0) {
+      await supabase.from("checklists").insert(
+        newChecklistItems.map((text, i) => ({ task_id: createdTask.id, text, position: i, done: false }))
+      );
+    }
+
+    // Register body images as attachments in DB
+    if (newBodyImages.length > 0 && user) {
+      await supabase.from("attachments").insert(
+        newBodyImages.map((img) => ({
+          task_id: createdTask.id,
+          uploaded_by: user.id,
+          file_name: img.name,
+          storage_path: img.path,
+          mime_type: "image/*",
+          size_bytes: null,
+        }))
+      );
+    }
+
     toast.success("Tarefa criada!");
-    setTasks((prev) => [...prev, data as TaskRow]);
+    setTasks((prev) => [...prev, createdTask]);
     setNewTitle(""); setNewDesc(""); setNewDue(""); setNewValue("");
     setNewProject("none"); setNewAssignee("none");
     setNewPriority("medium"); setNewStatus("new"); setNewType("internal");
+    setNewBodyImages([]); setNewChecklistItems([]);
     setCreateOpen(false);
     if (data) {
       void runAutomations({ trigger: "task_created", task: data as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
-      setPanelTaskId((data as TaskRow).id);
+      setPanelTaskId(createdTask.id);
     }
+  };
+
+  // Apply template to create form
+  const applyTemplate = (t: TaskTemplate) => {
+    setNewPriority(t.default_priority);
+    setNewType(t.default_task_type);
+    if (t.default_estimated_hours) {/* could store but not in form yet */}
+    if (t.default_service_value) setNewValue(String(t.default_service_value));
+    if (t.default_tags && t.default_tags.length > 0) {/* tags set via template — stored on task */}
+    if (t.checklist_items && t.checklist_items.length > 0) setNewChecklistItems(t.checklist_items);
+    if (t.description && !newDesc) setNewDesc(t.description);
+    toast.success(`Modelo "${t.name}" aplicado!`);
   };
 
   if (pageLoading || loading) {
@@ -274,6 +315,11 @@ function TasksPage() {
               <ListIcon className="h-4 w-4 mr-1" /> Lista
             </Button>
           </div>
+          {isManagerOrAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setShowTemplatesManager(true)}>
+              <ClipboardList className="h-4 w-4 mr-1" /> Modelos
+            </Button>
+          )}
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Nova tarefa
           </Button>
@@ -395,11 +441,23 @@ function TasksPage() {
       {createOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCreateOpen(false)}>
           <div className="bg-background rounded-xl border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-background z-10">
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-background z-10 gap-3 flex-wrap">
               <h2 className="text-lg font-semibold">Nova tarefa</h2>
-              <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-foreground rounded-full p-1 hover:bg-muted">
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <TemplatePicker onApply={applyTemplate} />
+                {isManagerOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatesManager(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border rounded-md px-2 py-1 hover:bg-muted"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" /> Gerenciar modelos
+                  </button>
+                )}
+                <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-foreground rounded-full p-1 hover:bg-muted">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <form onSubmit={createTask} className="p-5 space-y-4">
               <div>
@@ -409,6 +467,13 @@ function TasksPage() {
               <div>
                 <label className="text-sm font-medium">Descrição</label>
                 <Textarea className="mt-1" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Contexto, links, detalhes..." rows={3} />
+              </div>
+              {/* Images in body */}
+              <div>
+                <label className="text-sm font-medium">Imagens no corpo</label>
+                <div className="mt-1">
+                  <TaskBodyImages images={newBodyImages} onChange={setNewBodyImages} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -477,6 +542,25 @@ function TasksPage() {
                   <Input type="number" step="0.01" min="0" className="mt-1" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="Ex: 150.00" />
                 </div>
               )}
+              {/* Checklist preview from template */}
+              {newChecklistItems.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">Checklist do modelo ({newChecklistItems.length} itens)</label>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-destructive" onClick={() => setNewChecklistItems([])}>
+                      Remover checklist
+                    </button>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-2 space-y-1 max-h-40 overflow-y-auto">
+                    {newChecklistItems.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        <div className="h-3.5 w-3.5 rounded border border-muted-foreground/40 shrink-0" />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
                 <Button type="submit" disabled={createBusy || !newTitle.trim()}>{createBusy ? "Criando..." : "Criar tarefa"}</Button>
@@ -485,6 +569,9 @@ function TasksPage() {
           </div>
         </div>
       )}
+
+      {/* Templates manager modal */}
+      <TaskTemplatesManager open={showTemplatesManager} onClose={() => setShowTemplatesManager(false)} />
     </div>
   );
 }
@@ -1105,6 +1192,17 @@ function TaskSidePanel({
                 onChange={(e) => setTask({ ...task, description: e.target.value })}
                 onBlur={(e) => void update({ description: e.target.value || null })}
                 placeholder="Adicionar descrição..."
+                disabled={!canEdit}
+              />
+            </div>
+
+            {/* Body images */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Imagens</label>
+              <TaskBodyImages
+                taskId={task.id}
+                images={[]}
+                onChange={() => {}}
                 disabled={!canEdit}
               />
             </div>
