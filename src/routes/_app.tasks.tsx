@@ -274,13 +274,14 @@ function TasksPage() {
 
   // Apply template to create form
   const applyTemplate = (t: TaskTemplate) => {
+    // Título: preenche só se o campo estiver vazio
+    if (t.default_title && !newTitle) setNewTitle(t.default_title);
+    // Descrição: preenche só se vazia
+    if (t.description && !newDesc) setNewDesc(t.description);
     setNewPriority(t.default_priority);
     setNewType(t.default_task_type);
-    if (t.default_estimated_hours) {/* could store but not in form yet */}
     if (t.default_service_value) setNewValue(String(t.default_service_value));
-    if (t.default_tags && t.default_tags.length > 0) {/* tags set via template — stored on task */}
     if (t.checklist_items && t.checklist_items.length > 0) setNewChecklistItems(t.checklist_items);
-    if (t.description && !newDesc) setNewDesc(t.description);
     toast.success(`Modelo "${t.name}" aplicado!`);
   };
 

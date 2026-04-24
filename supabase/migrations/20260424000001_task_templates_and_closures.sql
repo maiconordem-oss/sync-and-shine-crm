@@ -49,3 +49,7 @@ CREATE POLICY "pj view own payments" ON public.payments FOR SELECT TO authentica
     OR beneficiary_user_id = auth.uid()
     OR created_by = auth.uid()
   );
+
+-- Add default_title column to task_templates (title template for new tasks)
+ALTER TABLE public.task_templates
+  ADD COLUMN IF NOT EXISTS default_title TEXT;
