@@ -12,6 +12,8 @@ import {
   LogOut,
   CheckCircle2,
   Bell,
+  Volume2,
+  VolumeX,
   Search,
   PanelLeftClose,
 } from "lucide-react";
