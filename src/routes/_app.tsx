@@ -72,7 +72,9 @@ function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unread, setUnread] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
+  // Initial unread count
   useEffect(() => {
     if (!user) return;
     void supabase
@@ -82,6 +84,48 @@ function AppLayout() {
       .eq("read", false)
       .then(({ count }) => setUnread(count ?? 0));
   }, [user, location.pathname]);
+
+  // Realtime: badge atualiza ao vivo quando chega nova notificação
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("notifications_badge_" + user.id)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        setUnread((n) => n + 1);
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      }, () => {
+        void supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("read", false)
+          .then(({ count }) => setUnread(count ?? 0));
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user]);
+
+  // Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -122,12 +166,16 @@ function AppLayout() {
         <SidebarInset className="min-w-0 bg-background">
           <header className="flex h-14 items-center gap-3 border-b bg-card px-4 md:px-6">
             <SidebarTrigger className="text-muted-foreground" />
-            <div className="hidden min-w-[260px] max-w-[420px] flex-1 md:block">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="h-9 border-border/80 bg-background pl-9" placeholder="Pesquisar" />
-              </div>
-            </div>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="hidden min-w-[220px] max-w-[380px] flex-1 md:flex items-center gap-2 h-9 rounded-md border border-border/80 bg-background px-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Buscar tarefas, projetos...</span>
+              <kbd className="hidden lg:inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1 text-[10px] font-medium opacity-60">
+                Ctrl K
+              </kbd>
+            </button>
             <div className="ml-auto flex items-center gap-2">
               <SoundToggleBtn />
           <Link to="/notifications" className="relative">
@@ -155,6 +203,7 @@ function AppLayout() {
           <main className="flex-1 overflow-hidden bg-background p-4 md:p-6 flex flex-col">
             <Outlet />
           </main>
+          <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
         </SidebarInset>
       </div>
     </SidebarProvider>

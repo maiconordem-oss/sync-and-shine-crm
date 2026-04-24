@@ -385,8 +385,8 @@ function TasksPage() {
       )}
 
       {/* Board + side panel */}
-      <div className={cn("flex gap-4 flex-1 min-h-0", panelTaskId && "overflow-hidden")}>
-        <div className={cn("flex-1 min-w-0", panelTaskId ? "overflow-auto" : "overflow-visible")}>
+      <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-w-0 overflow-auto">
           {view === "kanban" ? (
             <DndContext sensors={sensors} onDragEnd={onDragEnd}>
               <div className="flex gap-3 pb-4 overflow-x-auto h-full">
@@ -426,20 +426,30 @@ function TasksPage() {
           )}
         </div>
 
+        {/* Drawer overlay — slides in from right over the kanban */}
         {panelTaskId && (
-          <TaskSidePanel
-            key={panelTaskId}
-            taskId={panelTaskId}
-            onClose={() => setPanelTaskId(null)}
-            profiles={profiles}
-            projects={projects}
-            user={user}
-            authProfile={profile}
-            isManagerOrAdmin={isManagerOrAdmin}
-            onDelete={() => deleteTask(panelTaskId)}
-            onTaskUpdate={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
-            navigate={navigate}
-          />
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40 bg-black/30"
+              onClick={() => setPanelTaskId(null)}
+            />
+            <div className="fixed right-0 top-0 bottom-0 z-50 flex">
+              <TaskSidePanel
+                key={panelTaskId}
+                taskId={panelTaskId}
+                onClose={() => setPanelTaskId(null)}
+                profiles={profiles}
+                projects={projects}
+                user={user}
+                authProfile={profile}
+                isManagerOrAdmin={isManagerOrAdmin}
+                onDelete={() => deleteTask(panelTaskId)}
+                onTaskUpdate={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
+                navigate={navigate}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -984,18 +994,20 @@ function TaskSidePanel({
   const [titleDraft, setTitleDraft] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [history, setHistory] = useState<Array<{ id: string; action: string; field: string | null; old_value: string | null; new_value: string | null; user_id: string | null; created_at: string }>>([]);
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
   const loadPanel = useCallback(async () => {
     setLoading(true);
-    const [t, sub, c, ch, te] = await Promise.all([
+    const [t, sub, c, ch, te, hist] = await Promise.all([
       supabase.from("tasks").select("*").eq("id", taskId).maybeSingle(),
       supabase.from("tasks").select("id,title,status,priority,assignee_id").eq("parent_task_id", taskId),
       supabase.from("comments").select("*").eq("task_id", taskId).order("created_at"),
       supabase.from("checklists").select("*").eq("task_id", taskId).order("position"),
       supabase.from("time_entries").select("*").eq("task_id", taskId).order("started_at", { ascending: false }),
+      supabase.from("task_history").select("*").eq("task_id", taskId).order("created_at"),
     ]);
     if (t.data) { setTask(t.data as TaskRow); setTitleDraft((t.data as TaskRow).title); onTaskUpdate(t.data as TaskRow); }
     setSubtasks((sub.data ?? []) as SubTask[]);
@@ -1004,6 +1016,7 @@ function TaskSidePanel({
     setTimeEntries((te.data ?? []) as TimeEntry[]);
     const open = (te.data ?? []).find((x) => (x as TimeEntry).user_id === user?.id && !(x as TimeEntry).ended_at);
     setActiveTimer(open ? (open as TimeEntry).id : null);
+    setHistory((hist.data ?? []) as typeof history);
     setLoading(false);
   }, [taskId, user?.id]);
 
@@ -1027,13 +1040,34 @@ function TaskSidePanel({
   }, [comments]);
 
   const update = async (patch: Partial<TaskRow>) => {
-    if (!task) return;
+    if (!task || !user) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("tasks").update(patch as any).eq("id", task.id).select().single();
     if (error) { toast.error(error.message); return; }
     const updated = data as TaskRow;
     setTask(updated);
     onTaskUpdate(updated);
+    // Record history
+    const entries: Array<{ task_id: string; user_id: string; action: string; field: string; old_value: string | null; new_value: string | null }> = [];
+    if ("status" in patch && patch.status !== task.status) {
+      entries.push({ task_id: task.id, user_id: user.id, action: "status_changed", field: "status", old_value: task.status, new_value: patch.status as string });
+    }
+    if ("assignee_id" in patch && patch.assignee_id !== task.assignee_id) {
+      entries.push({ task_id: task.id, user_id: user.id, action: "assigned", field: "assignee_id", old_value: task.assignee_id, new_value: patch.assignee_id as string | null });
+    }
+    if ("due_date" in patch && patch.due_date !== task.due_date) {
+      entries.push({ task_id: task.id, user_id: user.id, action: "due_changed", field: "due_date", old_value: task.due_date, new_value: patch.due_date as string | null });
+    }
+    if ("priority" in patch && patch.priority !== task.priority) {
+      entries.push({ task_id: task.id, user_id: user.id, action: "priority_changed", field: "priority", old_value: task.priority, new_value: patch.priority as string });
+    }
+    if ("title" in patch && patch.title !== task.title) {
+      entries.push({ task_id: task.id, user_id: user.id, action: "title_changed", field: "title", old_value: task.title, new_value: patch.title as string });
+    }
+    if (entries.length > 0) {
+      const { data: newHist } = await supabase.from("task_history").insert(entries).select();
+      if (newHist) setHistory((h) => [...h, ...(newHist as typeof history)]);
+    }
   };
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
@@ -1151,14 +1185,42 @@ function TaskSidePanel({
   const assignee = profileById(task?.assignee_id ?? null);
   const creator = profileById(task?.created_by ?? null);
 
-  // Group comments by date
-  const groupedComments: { date: string; msgs: Comment[] }[] = [];
-  for (const m of comments) {
-    const d = new Date(m.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
-    const last = groupedComments[groupedComments.length - 1];
-    if (last?.date === d) last.msgs.push(m);
-    else groupedComments.push({ date: d, msgs: [m] });
+  // Merge comments + history into unified timeline
+  type TimelineItem =
+    | { kind: "comment"; data: Comment }
+    | { kind: "event"; data: typeof history[number] };
+
+  const timeline: TimelineItem[] = [
+    ...comments.map((m) => ({ kind: "comment" as const, data: m })),
+    ...history.map((h) => ({ kind: "event" as const, data: h })),
+  ].sort((a, b) => new Date(a.data.created_at).getTime() - new Date(b.data.created_at).getTime());
+
+  const groupedTimeline: { date: string; items: TimelineItem[] }[] = [];
+  for (const item of timeline) {
+    const d = new Date(item.data.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+    const last = groupedTimeline[groupedTimeline.length - 1];
+    if (last?.date === d) last.items.push(item);
+    else groupedTimeline.push({ date: d, items: [item] });
   }
+
+  const historyLabel = (h: typeof history[number]) => {
+    const actor = profileById(h.user_id)?.full_name ?? "Alguém";
+    const { action, old_value, new_value } = h;
+    if (action === "status_changed") return `${actor} mudou o status: ${STATUS_LABEL[old_value ?? ""] ?? old_value} → ${STATUS_LABEL[new_value ?? ""] ?? new_value}`;
+    if (action === "assigned") {
+      const newAssignee = profileById(new_value)?.full_name ?? "ninguém";
+      return `${actor} atribuiu a tarefa para ${newAssignee}`;
+    }
+    if (action === "due_changed") {
+      const d = new_value ? new Date(new_value).toLocaleDateString("pt-BR") : "sem prazo";
+      return `${actor} alterou o prazo para ${d}`;
+    }
+    if (action === "priority_changed") return `${actor} mudou a prioridade para ${PRIORITY_LABEL[new_value ?? ""] ?? new_value}`;
+    if (action === "title_changed") return `${actor} renomeou a tarefa`;
+    if (action === "created") return `${actor} criou esta tarefa`;
+    if (action === "completed") return `${actor} concluiu a tarefa`;
+    return `${actor} atualizou a tarefa`;
+  };
 
   if (loading) {
     return (
@@ -1173,7 +1235,7 @@ function TaskSidePanel({
   const proj = projects.find((p) => p.id === task.project_id);
 
   return (
-    <div className="w-[860px] shrink-0 border rounded-xl bg-background flex flex-col max-h-[calc(100vh-140px)] overflow-hidden shadow-xl">
+    <div className="w-[860px] border-l bg-background flex flex-col h-full overflow-hidden shadow-2xl">
 
       {/* ── Top bar ───────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/5 shrink-0">
@@ -1571,7 +1633,7 @@ function TaskSidePanel({
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
-            {comments.length === 0 && (
+            {timeline.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <MessageSquare className="h-10 w-10 mb-2 opacity-20" />
                 <p className="text-sm">Nenhuma mensagem ainda.</p>
@@ -1579,19 +1641,31 @@ function TaskSidePanel({
               </div>
             )}
 
-            {groupedComments.map(({ date, msgs }) => (
+            {groupedTimeline.map(({ date, items }) => (
               <div key={date}>
-                {/* Date divider */}
                 <div className="flex items-center gap-2 my-3">
                   <div className="flex-1 h-px bg-border" />
                   <span className="text-[11px] text-muted-foreground bg-muted/5 px-2">{date}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
-                {msgs.map((m, idx) => {
+                {items.map((item, idx) => {
+                  if (item.kind === "event") {
+                    return (
+                      <div key={"evt-" + item.data.id} className="flex items-center gap-2 py-1.5 px-1">
+                        <div className="h-px flex-1 bg-border/40" />
+                        <span className="text-[11px] text-muted-foreground bg-muted/40 rounded-full px-2.5 py-1 whitespace-nowrap italic">
+                          {historyLabel(item.data)}
+                        </span>
+                        <div className="h-px flex-1 bg-border/40" />
+                      </div>
+                    );
+                  }
+                  const m = item.data as Comment;
                   const isOwn = m.author_id === user?.id;
                   const author = profileById(m.author_id);
-                  const showAvatar = idx === 0 || msgs[idx - 1].author_id !== m.author_id;
+                  const prevItem = items[idx - 1];
+                  const showAvatar = !prevItem || prevItem.kind !== "comment" || (prevItem.data as Comment).author_id !== m.author_id;
                   return (
                     <div key={m.id} className={cn("flex gap-2 group", isOwn && "flex-row-reverse", !showAvatar && "mt-0.5")}>
                       <div className="w-8 shrink-0">
@@ -1615,7 +1689,7 @@ function TaskSidePanel({
                           <span className="whitespace-pre-wrap break-words">{renderCommentContent(m.content)}</span>
                           {(isOwn || isManagerOrAdmin) && (
                             <button
-                              onClick={async () => { await supabase.from("comments").delete().eq("id", m.id); setComments((c) => c.filter((x) => x.id !== m.id)); }}
+                              onClick={async () => { await supabase.from("comments").delete().eq("id", m.id); setComments((prev) => prev.filter((x) => x.id !== m.id)); }}
                               className={cn(
                                 "absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive",
                                 isOwn ? "-left-6" : "-right-6"
@@ -1630,64 +1704,4 @@ function TaskSidePanel({
                   );
                 })}
               </div>
-            ))}
-            <div ref={chatBottomRef} />
-          </div>
-
-          {/* Input */}
-          <div className="border-t bg-background px-3 py-2.5 shrink-0 relative">
-            {/* Mention autocomplete */}
-            {mentionSearch !== null && mentionResults.length > 0 && (
-              <div className="absolute bottom-full mb-1 left-3 w-52 bg-background border rounded-xl shadow-xl z-50 overflow-hidden">
-                {mentionResults.map((p) => (
-                  <button key={p.id} onClick={() => insertMention(p.full_name ?? "")}
-                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-muted text-left text-sm">
-                    <Avatar className="h-5 w-5 shrink-0"><AvatarFallback className="text-[9px]">{initials(p.full_name)}</AvatarFallback></Avatar>
-                    {p.full_name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2 items-end">
-              <Textarea
-                ref={commentRef}
-                value={newComment}
-                onChange={(e) => {
-                  setNewComment(e.target.value);
-                  const val = e.target.value;
-                  const lastAt = val.lastIndexOf("@");
-                  if (lastAt !== -1) {
-                    const after = val.slice(lastAt + 1);
-                    if (!after.includes(" ")) setMentionSearch(after.toLowerCase());
-                    else setMentionSearch(null);
-                  } else setMentionSearch(null);
-                }}
-                onKeyDown={handleCommentKey}
-                placeholder="Digite @ ou + para mencionar uma pessoa... Enter para enviar"
-                rows={1}
-                className="resize-none text-sm flex-1 border-muted bg-muted/30 min-h-[38px] max-h-[100px]"
-              />
-              <Button size="sm" onClick={sendComment} disabled={!newComment.trim()} className="h-10 w-10 p-0 rounded-full shrink-0">
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
+            ))
