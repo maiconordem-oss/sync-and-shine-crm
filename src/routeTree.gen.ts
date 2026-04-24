@@ -194,7 +194,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/_app/automations'
-    | '/_app/calendar'
     | '/_app/profile'
     | '/_app/chat'
     | '/_app/dashboard'
