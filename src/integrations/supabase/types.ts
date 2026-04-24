@@ -208,11 +208,13 @@ export type Database = {
       monthly_closures: {
         Row: {
           closed_at: string | null
+          closed_by: string | null
           created_at: string
           created_by: string | null
           id: string
           notes: string | null
           paid_at: string | null
+          paid_by: string | null
           pj_user_id: string
           reference_month: string
           status: string
@@ -222,11 +224,13 @@ export type Database = {
         }
         Insert: {
           closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           notes?: string | null
           paid_at?: string | null
+          paid_by?: string | null
           pj_user_id: string
           reference_month: string
           status?: string
@@ -236,11 +240,13 @@ export type Database = {
         }
         Update: {
           closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           notes?: string | null
           paid_at?: string | null
+          paid_by?: string | null
           pj_user_id?: string
           reference_month?: string
           status?: string
