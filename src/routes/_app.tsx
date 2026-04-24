@@ -1,3 +1,4 @@
+import { GlobalSearch } from "@/components/global-search";
 import { createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import {

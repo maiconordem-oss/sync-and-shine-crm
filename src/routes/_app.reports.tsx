@@ -289,11 +289,14 @@ function AdminView() {
     const pjTasks = tasks.filter((t) => t.assignee_id === pj.id);
     const totalPending = pjPayments.filter((p) => p.status === "pending").reduce((s, p) => s + Number(p.amount), 0);
     const totalPaid = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
-    const totalToPay = totalPending + totalPaid;
     const completedTasks = pjTasks.length;
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
     const sumValues = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
     const avgPerTask = tasksWithValue.length > 0 ? sumValues / tasksWithValue.length : 0;
+    // totalToPay = payments OR task service_values (whichever is greater / more complete)
+    // If payments exist and sum > 0, use them; otherwise use task service_values
+    const paymentTotal = totalPending + totalPaid;
+    const totalToPay = paymentTotal > 0 ? paymentTotal : sumValues;
     const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
     return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure };
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures]);

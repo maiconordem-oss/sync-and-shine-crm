@@ -139,7 +139,7 @@ function ProfilePage() {
                 {user?.email ?? "—"}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Membro desde {profile ? formatDateTime(profile.created_at ?? "") : "—"}
+                Membro desde {user ? formatDateTime(user.created_at ?? "") : "—"}
               </div>
             </div>
           </div>

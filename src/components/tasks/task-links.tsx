@@ -31,8 +31,8 @@ export function TaskLinks({ taskId, canEdit }: { taskId: string; canEdit: boolea
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("task_links").select("*").eq("task_id", taskId).order("created_at");
-    setLinks((data ?? []) as TaskLink[]);
+    const { data } = await supabase.from("task_links" as never).select("*").eq("task_id", taskId).order("created_at");
+    setLinks((data ?? []) as unknown as TaskLink[]);
   };
 
   useEffect(() => { void load(); }, [taskId]);
@@ -43,7 +43,8 @@ export function TaskLinks({ taskId, canEdit }: { taskId: string; canEdit: boolea
     let finalUrl = url.trim();
     if (!finalUrl.startsWith("http")) finalUrl = "https://" + finalUrl;
     setBusy(true);
-    const { data, error } = await supabase.from("task_links").insert([{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from("task_links" as never) as any).insert([{
       task_id: taskId,
       url: finalUrl,
       title: title.trim() || getDomain(finalUrl),
@@ -51,13 +52,13 @@ export function TaskLinks({ taskId, canEdit }: { taskId: string; canEdit: boolea
     }]).select().single();
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    setLinks((l) => [...l, data as TaskLink]);
+    setLinks((l) => [...l, data as unknown as TaskLink]);
     setUrl(""); setTitle(""); setAdding(false);
     toast.success("Link adicionado!");
   };
 
   const remove = async (id: string) => {
-    await supabase.from("task_links").delete().eq("id", id);
+    await supabase.from("task_links" as never).delete().eq("id", id);
     setLinks((l) => l.filter((x) => x.id !== id));
   };
 

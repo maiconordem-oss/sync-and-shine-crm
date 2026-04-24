@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_app/tasks")({
   component: TasksPage,
 });
 
-type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred";
+type TaskStatus = "new" | "in_progress" | "waiting" | "in_review" | "done" | "deferred" | "awaiting_approval";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskRow {
@@ -67,6 +67,10 @@ interface TaskRow {
   service_value: number | null;
   completed_at: string | null;
   created_at: string;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  returned_at?: string | null;
+  return_note?: string | null;
 }
 
 interface ProfileLite {
@@ -189,12 +193,17 @@ function TasksPage() {
     const prevStatus = task.status;
     const update = { status: newSt, completed_at: newSt === "done" ? new Date().toISOString() : null };
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, ...update } : t));
-    const { error } = await supabase.from("tasks").update(update).eq("id", taskId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from("tasks").update(update as any).eq("id", taskId);
     if (error) { toast.error(error.message); void load(); return; }
     if (user) {
-      void runAutomations({ trigger: "status_changed", task: { ...task, ...update } as unknown as Record<string, unknown>, previousStatus: prevStatus, userId: user.id, userName: profile?.full_name ?? undefined });
       playSound(newSt === "done" ? "task_complete" : "status_change");
-    if (newSt === "done") void runAutomations({ trigger: "task_completed", task: { ...task, ...update } as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
+      if (newSt === "done") {
+        // Only fire task_completed when done — avoids duplicate payment creation
+        void runAutomations({ trigger: "task_completed", task: { ...task, ...update } as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
+      } else {
+        void runAutomations({ trigger: "status_changed", task: { ...task, ...update } as unknown as Record<string, unknown>, previousStatus: prevStatus, userId: user.id, userName: profile?.full_name ?? undefined });
+      }
     }
     toast.success(`→ ${STATUS_LABEL[newSt]}`);
   };
@@ -237,7 +246,8 @@ function TasksPage() {
       service_value: taskType === "external" && newValue ? Number(newValue) : null,
       position: tasks.length,
     };
-    const { data, error } = await supabase.from("tasks").insert([payload]).select().single();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await supabase.from("tasks").insert([payload] as any).select().single();
     setCreateBusy(false);
     if (error) { toast.error(error.message); return; }
     const createdTask = data as TaskRow;
@@ -602,6 +612,7 @@ const STATUS_COLORS: Record<TaskStatus, string> = {
   in_review: "bg-purple-500",
   done: "bg-emerald-500",
   deferred: "bg-neutral-400",
+  awaiting_approval: "bg-orange-400",
 };
 
 function KanbanColumn({
@@ -631,9 +642,10 @@ function KanbanColumn({
     e.preventDefault();
     const title = inlineTitle.trim();
     if (!title || !userId) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("tasks").insert([{
       title, status, priority: "medium", created_by: userId, position: tasks.length,
-    }]).select().single();
+    }] as any).select().single();
     if (error) { toast.error(error.message); return; }
     onInlineCreate(data as TaskRow);
     setInlineTitle(""); setAdding(false);
@@ -1008,7 +1020,7 @@ function TaskSidePanel({
       supabase.from("comments").select("*").eq("task_id", taskId).order("created_at"),
       supabase.from("checklists").select("*").eq("task_id", taskId).order("position"),
       supabase.from("time_entries").select("*").eq("task_id", taskId).order("started_at", { ascending: false }),
-      supabase.from("task_history").select("*").eq("task_id", taskId).order("created_at"),
+      supabase.from("task_history" as never).select("*").eq("task_id", taskId as never).order("created_at"),
     ]);
     if (t.data) { setTask(t.data as TaskRow); setTitleDraft((t.data as TaskRow).title); onTaskUpdate(t.data as TaskRow); }
     setSubtasks((sub.data ?? []) as SubTask[]);
@@ -1017,7 +1029,7 @@ function TaskSidePanel({
     setTimeEntries((te.data ?? []) as TimeEntry[]);
     const open = (te.data ?? []).find((x) => (x as TimeEntry).user_id === user?.id && !(x as TimeEntry).ended_at);
     setActiveTimer(open ? (open as TimeEntry).id : null);
-    setHistory((hist.data ?? []) as typeof history);
+    setHistory((hist.data ?? []) as unknown as typeof history);
     setLoading(false);
   }, [taskId, user?.id]);
 
@@ -1066,8 +1078,8 @@ function TaskSidePanel({
       entries.push({ task_id: task.id, user_id: user.id, action: "title_changed", field: "title", old_value: task.title, new_value: patch.title as string });
     }
     if (entries.length > 0) {
-      const { data: newHist } = await supabase.from("task_history").insert(entries).select();
-      if (newHist) setHistory((h) => [...h, ...(newHist as typeof history)]);
+      const { data: newHist } = await supabase.from("task_history" as never).insert(entries as never).select();
+      if (newHist) setHistory((h) => [...h, ...(newHist as unknown as typeof history)]);
     }
   };
 
@@ -1160,10 +1172,11 @@ function TaskSidePanel({
 
   const addSubtask = async () => {
     if (!subtaskTitle.trim() || !user || !task) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("tasks").insert([{
       title: subtaskTitle.trim(), status: "new" as TaskStatus, priority: "medium" as TaskPriority,
       parent_task_id: task.id, project_id: task.project_id, created_by: user.id, position: subtasks.length,
-    }]).select().single();
+    }] as any).select().single();
     if (error) { toast.error(error.message); return; }
     setSubtasks((s) => [...s, data as SubTask]);
     setSubtaskTitle(""); setAddingSubtask(false);
@@ -1745,4 +1758,63 @@ function TaskSidePanel({
                   );
                 })}
               </div>
-            ))
+            ))}
+
+            <div ref={chatBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t bg-background px-3 py-2.5 shrink-0 relative">
+            {mentionSearch !== null && mentionResults.length > 0 && (
+              <div className="absolute bottom-full mb-1 left-3 w-52 bg-background border rounded-xl shadow-xl z-50 overflow-hidden">
+                {mentionResults.map((p) => (
+                  <button key={p.id} onClick={() => insertMention(p.full_name ?? "")}
+                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-muted text-left text-sm">
+                    <Avatar className="h-5 w-5 shrink-0"><AvatarFallback className="text-[9px]">{initials(p.full_name)}</AvatarFallback></Avatar>
+                    {p.full_name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <Textarea
+                ref={commentRef}
+                value={newComment}
+                onChange={(e) => {
+                  setNewComment(e.target.value);
+                  const val = e.target.value;
+                  const lastAt = val.lastIndexOf("@");
+                  if (lastAt !== -1) {
+                    const after = val.slice(lastAt + 1);
+                    if (!after.includes(" ")) setMentionSearch(after.toLowerCase());
+                    else setMentionSearch(null);
+                  } else setMentionSearch(null);
+                }}
+                onKeyDown={handleCommentKey}
+                placeholder="Digite @ para mencionar alguém... Enter para enviar"
+                rows={1}
+                className="resize-none text-sm flex-1 border-muted bg-muted/30 min-h-[38px] max-h-[100px]"
+              />
+              <Button size="sm" onClick={sendComment} disabled={!newComment.trim()} className="h-10 w-10 p-0 rounded-full shrink-0">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

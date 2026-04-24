@@ -197,6 +197,9 @@ async function executeAction(
   }
 }
 
+// Global in-memory dedup set: "automationId:taskId:trigger" → timestamp
+const _recentRuns = new Map<string, number>();
+
 export async function runAutomations(ctx: TriggerContext, depth = 0): Promise<void> {
   if (depth > 5) return;
   const { data: rows } = await supabase
@@ -206,8 +209,17 @@ export async function runAutomations(ctx: TriggerContext, depth = 0): Promise<vo
     .eq("trigger_type", ctx.trigger);
 
   const list = (rows ?? []) as unknown as Automation[];
+  const taskId = (ctx.task as { id?: string } | null)?.id ?? "no-task";
+
   for (const auto of list) {
     if (!matchesConditions(auto.conditions ?? [], ctx)) continue;
+
+    // Dedup: skip if same automation+task+trigger ran in the last 10 seconds
+    const dedupKey = `${auto.id}:${taskId}:${ctx.trigger}`;
+    const lastRun = _recentRuns.get(dedupKey) ?? 0;
+    const now = Date.now();
+    if (now - lastRun < 10_000) continue;
+    _recentRuns.set(dedupKey, now);
     const results: unknown[] = [];
     let runStatus = "success";
     let errorMsg: string | null = null;
