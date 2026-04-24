@@ -146,18 +146,38 @@ async function executeAction(
       return { ok: true };
     }
     case "create_payment": {
+      const task = ctx.task as Record<string, unknown> | null;
+      // Use task service_value if use_task_value flag is set
+      const amount = p.use_task_value
+        ? Number(task?.service_value ?? p.amount ?? 0)
+        : Number(p.amount ?? 0);
+      // Auto-assign beneficiary to task assignee if not specified
+      const beneficiaryUserId = (p.beneficiary_user_id as string) || (task?.assignee_id as string) || null;
+
+      // Dedup: don't create duplicate pending payment for same task+beneficiary
+      if (task?.id && beneficiaryUserId) {
+        const { data: existing } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("task_id", String(task.id))
+          .eq("beneficiary_user_id", beneficiaryUserId)
+          .eq("status", "pending")
+          .maybeSingle();
+        if (existing) return { skipped: true, reason: "duplicate" };
+      }
+
       const { data, error } = await supabase
         .from("payments")
         .insert({
-          description: renderTemplate(String(p.description ?? "Pagamento"), ctx),
-          amount: Number(p.amount ?? 0),
-          currency: String(p.currency ?? "BRL"),
-          beneficiary_user_id: (p.beneficiary_user_id as string) || null,
+          description: renderTemplate(String(p.description ?? "Pagamento ref. {{tarefa.titulo}}"), ctx),
+          amount,
+          currency: "BRL",
+          beneficiary_user_id: beneficiaryUserId,
           beneficiary_name: (p.beneficiary_name as string) || null,
           status: "pending",
           due_date: p.due_in_days ? format(addDays(new Date(), Number(p.due_in_days)), "yyyy-MM-dd") : null,
-          task_id: (ctx.task as { id?: string } | null)?.id ?? null,
-          project_id: (ctx.task as { project_id?: string } | null)?.project_id ?? null,
+          task_id: task?.id ? String(task.id) : null,
+          project_id: task?.project_id ? String(task.project_id) : null,
           created_by: ctx.userId,
         })
         .select()
