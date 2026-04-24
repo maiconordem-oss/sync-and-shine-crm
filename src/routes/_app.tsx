@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { MessageSquare, createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import {
   LayoutDashboard,
@@ -8,6 +8,7 @@ import {
   Workflow,
   BarChart3,
   Users,
+  MessageSquare,
   LogOut,
   CheckCircle2,
   Bell,
@@ -59,6 +60,7 @@ const NAV: NavItem[] = [
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/payments", label: "Pagamentos", icon: Wallet },
   { to: "/reports", label: "Relatórios", icon: BarChart3 },
+  { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true },
   { to: "/members", label: "Membros", icon: Users, adminOnly: true },
 ];
@@ -125,7 +127,8 @@ function AppLayout() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Link to="/notifications" className="relative">
+              <SoundToggle />
+          <Link to="/notifications" className="relative">
                 <Button variant="ghost" size="icon" className="rounded-md">
                   <Bell className="h-4 w-4" />
                 </Button>

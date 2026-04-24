@@ -26,6 +26,7 @@ import {
   useSensor, useSensors, useDroppable, useDraggable,
 } from "@dnd-kit/core";
 import { runAutomations } from "@/lib/automations";
+import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
 import { TaskAttachments } from "@/components/tasks/task-attachments";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
@@ -112,7 +113,8 @@ interface SubTask {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function TasksPage() {
-  const { user, profile, loading, isAuthenticated, isManagerOrAdmin } = useAuth();
+  const { user, profile, loading, isAuthenticated, isManagerOrAdmin, canCreateTasks } = useAuth();
+  const { play: playSound } = useSound();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [tasks, setTasks] = useState<TaskRow[]>([]);
@@ -190,7 +192,8 @@ function TasksPage() {
     if (error) { toast.error(error.message); void load(); return; }
     if (user) {
       void runAutomations({ trigger: "status_changed", task: { ...task, ...update } as unknown as Record<string, unknown>, previousStatus: prevStatus, userId: user.id, userName: profile?.full_name ?? undefined });
-      if (newSt === "done") void runAutomations({ trigger: "task_completed", task: { ...task, ...update } as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
+      playSound(newSt === "done" ? "task_complete" : "status_change");
+    if (newSt === "done") void runAutomations({ trigger: "task_completed", task: { ...task, ...update } as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
     }
     toast.success(`→ ${STATUS_LABEL[newSt]}`);
   };
@@ -321,9 +324,11 @@ function TasksPage() {
               <ClipboardList className="h-4 w-4 mr-1" /> Modelos
             </Button>
           )}
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Nova tarefa
-          </Button>
+          {canCreateTasks && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Nova tarefa
+            </Button>
+          )}
         </div>
       </div>
 

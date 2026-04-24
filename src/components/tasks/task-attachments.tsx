@@ -1,13 +1,12 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, FileText, Download, Image as ImageIcon, ClipboardPaste, Upload } from "lucide-react";
+import { Trash2, FileText, Download, Image as ImageIcon, Upload, File, FileSpreadsheet, Archive } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-interface Attachment {
+export interface Attachment {
   id: string;
   task_id: string;
   uploaded_by: string | null;
@@ -19,6 +18,7 @@ interface Attachment {
 }
 
 const BUCKET = "attachments";
+const MAX_MB = 50;
 
 function formatSize(bytes: number | null) {
   if (!bytes) return "";
@@ -27,215 +27,176 @@ function formatSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TaskAttachments({ taskId }: { taskId: string }) {
-  const { user } = useAuth();
+function FileIcon({ mime, name }: { mime: string | null; name: string }) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (mime?.startsWith("image/")) return <ImageIcon className="h-8 w-8 text-blue-500" />;
+  if (mime === "application/pdf" || ext === "pdf") return <FileText className="h-8 w-8 text-rose-500" />;
+  if (["xls","xlsx","csv"].includes(ext)) return <FileSpreadsheet className="h-8 w-8 text-emerald-600" />;
+  if (["zip","rar","7z","tar","gz"].includes(ext)) return <Archive className="h-8 w-8 text-purple-500" />;
+  return <File className="h-8 w-8 text-muted-foreground" />;
+}
+
+const isImage = (mime: string | null) => mime?.startsWith("image/") ?? false;
+
+export function TaskAttachments({ taskId, createdBy }: { taskId: string; createdBy?: string | null }) {
+  const { user, isManagerOrAdmin } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [pasteFocus, setPasteFocus] = useState(false);
-  const pasteRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // Global paste listener — capture images pasted anywhere on the page
+  const canUpload = !createdBy || user?.id === createdBy || isManagerOrAdmin;
+  const canDelete = (a: Attachment) => a.uploaded_by === user?.id || isManagerOrAdmin;
+
+  // Global paste listener
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (!e.clipboardData) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable;
+      if (!canUpload || !e.clipboardData) return;
       const files: File[] = [];
       for (const item of Array.from(e.clipboardData.items)) {
-        if (item.kind === "file") {
-          const f = item.getAsFile();
-          if (f && f.type.startsWith("image/")) files.push(f);
-        }
+        if (item.kind === "file") { const f = item.getAsFile(); if (f) files.push(f); }
       }
-      if (files.length === 0) return;
-      // If user is typing in an input/textarea, only capture if there's no text being pasted
-      if (isEditable && e.clipboardData.getData("text")) return;
+      if (!files.length) return;
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if ((tag === "INPUT" || tag === "TEXTAREA") && e.clipboardData.getData("text")) return;
       e.preventDefault();
       void upload(files);
-      toast.success(`Colando ${files.length} imagem(ns)...`);
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, user]);
+  }, [taskId, user, canUpload]);
 
   const load = async () => {
-    const { data, error } = await supabase
-      .from("attachments")
-      .select("*")
-      .eq("task_id", taskId)
-      .order("created_at", { ascending: false });
-    if (error) { toast.error(error.message); return; }
+    const { data } = await supabase.from("attachments").select("*").eq("task_id", taskId).order("created_at", { ascending: false });
     const list = (data ?? []) as Attachment[];
     setItems(list);
     const signed: Record<string, string> = {};
     await Promise.all(list.map(async (a) => {
-      const { data: s } = await supabase.storage.from(BUCKET).createSignedUrl(a.storage_path, 3600);
+      const { data: s } = await supabase.storage.from(BUCKET).createSignedUrl(a.storage_path, 3600 * 8);
       if (s?.signedUrl) signed[a.id] = s.signedUrl;
     }));
     setUrls(signed);
   };
 
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [taskId]);
+  useEffect(() => { void load(); }, [taskId]);
 
-  const upload = async (files: FileList | File[]) => {
+  const upload = async (files: File[] | FileList) => {
     if (!user) return;
     setBusy(true);
     for (const file of Array.from(files)) {
-      if (file.size > 20 * 1024 * 1024) {
-        toast.error(`${file.name}: máximo 20MB`);
-        continue;
-      }
+      if (file.size > MAX_MB * 1024 * 1024) { toast.error(`${file.name}: máximo ${MAX_MB}MB`); continue; }
       const ext = file.name.split(".").pop() ?? "bin";
       const path = `${user.id}/${taskId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
-        contentType: file.type, upsert: false,
-      });
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) { toast.error(`${file.name}: ${upErr.message}`); continue; }
-      const { data: inserted, error: dbErr } = await supabase.from("attachments").insert([{
-        task_id: taskId,
-        uploaded_by: user.id,
-        file_name: file.name,
-        storage_path: path,
-        mime_type: file.type || null,
-        size_bytes: file.size,
+      const { data: ins, error: dbErr } = await supabase.from("attachments").insert([{
+        task_id: taskId, uploaded_by: user.id, file_name: file.name,
+        storage_path: path, mime_type: file.type || null, size_bytes: file.size,
       }]).select().single();
-      if (dbErr) {
-        toast.error(`${file.name}: ${dbErr.message}`);
-        await supabase.storage.from(BUCKET).remove([path]);
-        continue;
+      if (dbErr) { toast.error(dbErr.message); await supabase.storage.from(BUCKET).remove([path]); continue; }
+      const a = ins as Attachment;
+      setItems((p) => [a, ...p]);
+      if (isImage(file.type)) {
+        const blob = URL.createObjectURL(file);
+        setUrls((p) => ({ ...p, [a.id]: blob }));
+        const { data: s } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600 * 8);
+        if (s?.signedUrl) setUrls((p) => { URL.revokeObjectURL(p[a.id] ?? ""); return { ...p, [a.id]: s.signedUrl }; });
+      } else {
+        const { data: s } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600 * 8);
+        if (s?.signedUrl) setUrls((p) => ({ ...p, [a.id]: s.signedUrl }));
       }
-
-      const insertedAttachment = inserted as Attachment;
-      setItems((prev) => [insertedAttachment, ...prev]);
-
-      const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-      if (previewUrl) {
-        setUrls((prev) => ({ ...prev, [insertedAttachment.id]: previewUrl }));
-      }
-
-      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-      if (signed?.signedUrl) {
-        setUrls((prev) => {
-          const current = prev[insertedAttachment.id];
-          if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
-          return { ...prev, [insertedAttachment.id]: signed.signedUrl };
-        });
-      }
+      toast.success(`${file.name} enviado!`);
     }
     setBusy(false);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const remove = async (a: Attachment) => {
     if (!confirm(`Excluir "${a.file_name}"?`)) return;
-    const { error } = await supabase.from("attachments").delete().eq("id", a.id);
-    if (error) { toast.error(error.message); return; }
+    await supabase.from("attachments").delete().eq("id", a.id);
     await supabase.storage.from(BUCKET).remove([a.storage_path]);
     setItems((p) => p.filter((x) => x.id !== a.id));
+    toast.success("Arquivo removido.");
   };
-
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length) return;
-    await upload(files);
-    e.target.value = "";
-  };
-
-  const isImage = (m: string | null) => m?.startsWith("image/");
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Anexos</CardTitle>
-        <div className="text-xs text-muted-foreground">Cole a imagem direto aqui</div>
-      </CardHeader>
-      <CardContent>
+    <div className="space-y-3">
+      {canUpload && (
         <div
-          ref={pasteRef}
-          tabIndex={0}
-          onFocus={() => setPasteFocus(true)}
-          onBlur={() => setPasteFocus(false)}
-          onClick={() => pasteRef.current?.focus()}
-          className={`rounded-md border-2 border-dashed p-5 text-center text-sm text-muted-foreground transition-colors cursor-pointer outline-none ${pasteFocus ? "border-primary bg-primary/5" : "border-muted"}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); void upload(Array.from(e.dataTransfer.files)); }}
+          onClick={() => fileRef.current?.click()}
+          className={cn(
+            "flex flex-col items-center gap-2 rounded-xl border-2 border-dashed p-4 cursor-pointer transition-all text-center",
+            dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/20 hover:border-primary/40 hover:bg-muted/20",
+            busy && "pointer-events-none opacity-60"
+          )}
         >
-          <div className="flex flex-col items-center gap-2">
-            <div className="grid h-10 w-10 place-items-center rounded-md border bg-background text-primary">
-              <ClipboardPaste className="h-5 w-5" />
-            </div>
-            <div className="font-medium text-foreground">
-              {pasteFocus ? "Pronto para colar a imagem" : "Clique aqui e cole a imagem"}
-            </div>
-            <div>Use Ctrl+V ou Cmd+V para enviar prints e imagens rapidamente.</div>
-          </div>
+          <Upload className="h-5 w-5 text-muted-foreground" />
+          <div className="text-sm font-medium">{busy ? "Enviando..." : "Arraste ou clique para anexar"}</div>
+          <div className="text-xs text-muted-foreground">PDF, imagens, planilhas, Word — máx. {MAX_MB}MB · Cole prints com Ctrl+V</div>
         </div>
+      )}
+      <input ref={fileRef} type="file" multiple accept="*/*" className="hidden"
+        onChange={(e: ChangeEvent<HTMLInputElement>) => { if (e.target.files) void upload(e.target.files); }} />
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => void handleFileChange(e)}
-        />
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-          >
-            <Upload className="h-4 w-4" />
-            {busy ? "Enviando..." : "Escolher imagem"}
-          </Button>
-        </div>
-
-        {items.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-            {items.map((a) => (
-              <div key={a.id} className="group relative rounded-md border bg-card overflow-hidden">
-                {isImage(a.mime_type) && urls[a.id] ? (
-                  <a href={urls[a.id]} target="_blank" rel="noreferrer" className="block aspect-video bg-muted">
-                    <img src={urls[a.id]} alt={a.file_name} className="h-full w-full object-cover" />
-                  </a>
-                ) : (
-                  <a href={urls[a.id]} target="_blank" rel="noreferrer"
-                    className="aspect-video bg-muted flex items-center justify-center">
-                    <FileText className="h-10 w-10 text-muted-foreground" />
-                  </a>
-                )}
-                <div className="p-2 text-xs">
-                  <div className="font-medium truncate" title={a.file_name}>{a.file_name}</div>
-                  <div className="text-muted-foreground flex items-center justify-between mt-0.5">
-                    <span>{formatSize(a.size_bytes)}</span>
-                    <span>{formatDateTime(a.created_at)}</span>
-                  </div>
-                </div>
-                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {urls[a.id] && (
-                    <a href={urls[a.id]} download={a.file_name}
-                      className="rounded bg-background/90 p-1 hover:bg-background border">
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                  )}
-                  <button onClick={() => remove(a)}
-                    className="rounded bg-background/90 p-1 hover:bg-destructive hover:text-destructive-foreground border">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {isImage(a.mime_type) && (
-                  <div className="absolute top-1 left-1 rounded bg-background/80 p-0.5 border">
-                    <ImageIcon className="h-3 w-3" />
-                  </div>
-                )}
+      {/* Image thumbnails */}
+      {items.filter((a) => isImage(a.mime_type)).length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {items.filter((a) => isImage(a.mime_type)).map((a) => (
+            <div key={a.id} className="relative group rounded-lg overflow-hidden border bg-muted aspect-video">
+              {urls[a.id] && <a href={urls[a.id]} target="_blank" rel="noreferrer"><img src={urls[a.id]} alt={a.file_name} className="w-full h-full object-cover" /></a>}
+              <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {urls[a.id] && <a href={urls[a.id]} download={a.file_name} onClick={(e) => e.stopPropagation()} className="bg-black/60 text-white rounded-full p-1 hover:bg-primary"><Download className="h-3 w-3" /></a>}
+                {canDelete(a) && <button onClick={() => remove(a)} className="bg-black/60 text-white rounded-full p-1 hover:bg-red-600"><Trash2 className="h-3 w-3" /></button>}
               </div>
-            ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Non-image files */}
+      {items.filter((a) => !isImage(a.mime_type)).map((a) => (
+        <div key={a.id} className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 group hover:border-primary/30 transition-colors">
+          <FileIcon mime={a.mime_type} name={a.file_name} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{a.file_name}</div>
+            <div className="text-xs text-muted-foreground">{formatSize(a.size_bytes)} · {formatDateTime(a.created_at)}</div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          <div className="flex gap-1 shrink-0">
+            {urls[a.id] && (
+              <a href={urls[a.id]} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Baixar/Abrir">
+                <Download className="h-4 w-4" />
+              </a>
+            )}
+            {canDelete(a) && (
+              <button onClick={() => remove(a)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {items.length === 0 && !canUpload && <p className="text-sm text-center text-muted-foreground py-4">Nenhum anexo.</p>}
+    </div>
   );
+}
+
+// Hook para thumbnail no kanban card
+export function useTaskThumbnail(taskId: string | null) {
+  const [thumb, setThumb] = useState<string | null>(null);
+  useEffect(() => {
+    if (!taskId) return;
+    supabase.from("attachments").select("storage_path,mime_type").eq("task_id", taskId)
+      .like("mime_type", "image/%").order("created_at", { ascending: true }).limit(1).maybeSingle()
+      .then(async ({ data }) => {
+        if (!data) return;
+        const { data: s } = await supabase.storage.from("attachments").createSignedUrl(data.storage_path, 3600 * 4);
+        if (s?.signedUrl) setThumb(s.signedUrl);
+      });
+  }, [taskId]);
+  return thumb;
 }

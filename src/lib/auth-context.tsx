@@ -10,6 +10,8 @@ export interface Profile {
   email: string | null;
   avatar_url: string | null;
   job_title: string | null;
+  contract_type: "clt" | "pj" | null;
+  sound_enabled: boolean;
 }
 
 interface AuthContextValue {
@@ -21,10 +23,14 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isManagerOrAdmin: boolean;
+  isPJ: boolean;          // contract_type === 'pj'
+  canCreateTasks: boolean; // admin, manager, or CLT member
+  soundEnabled: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  setSoundEnabled: (v: boolean) => void;
 }
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -98,6 +104,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user) await loadProfileAndRoles(user.id);
   }, [user, loadProfileAndRoles]);
 
+  const [soundEnabled, setSoundEnabledState] = React.useState(true);
+
+  // Sync sound setting from profile
+  React.useEffect(() => {
+    if (profile) setSoundEnabledState(profile.sound_enabled ?? true);
+  }, [profile?.sound_enabled]);
+
+  const setSoundEnabled = React.useCallback(async (v: boolean) => {
+    setSoundEnabledState(v);
+    if (user) await supabase.from("profiles").update({ sound_enabled: v }).eq("id", user.id);
+  }, [user]);
+
+  const isPJ = profile?.contract_type === "pj";
+  const canCreateTasks = roles.includes("admin") || roles.includes("manager") || (!isPJ && roles.includes("member"));
+
   const value: AuthContextValue = {
     session,
     user,
@@ -107,6 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: !!session,
     isAdmin: roles.includes("admin"),
     isManagerOrAdmin: roles.includes("admin") || roles.includes("manager"),
+    isPJ,
+    canCreateTasks,
+    soundEnabled,
+    setSoundEnabled,
     signIn,
     signUp,
     signOut,
