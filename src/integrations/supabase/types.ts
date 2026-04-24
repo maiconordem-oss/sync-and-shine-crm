@@ -417,6 +417,51 @@ export type Database = {
           },
         ]
       }
+      task_templates: {
+        Row: {
+          checklist_items: string[] | null
+          created_at: string
+          created_by: string | null
+          default_estimated_hours: number | null
+          default_priority: Database["public"]["Enums"]["task_priority"]
+          default_service_value: number | null
+          default_tags: string[] | null
+          default_task_type: Database["public"]["Enums"]["task_type"]
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          checklist_items?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          default_estimated_hours?: number | null
+          default_priority?: Database["public"]["Enums"]["task_priority"]
+          default_service_value?: number | null
+          default_tags?: string[] | null
+          default_task_type?: Database["public"]["Enums"]["task_type"]
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          checklist_items?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          default_estimated_hours?: number | null
+          default_priority?: Database["public"]["Enums"]["task_priority"]
+          default_service_value?: number | null
+          default_tags?: string[] | null
+          default_task_type?: Database["public"]["Enums"]["task_type"]
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assignee_id: string | null
