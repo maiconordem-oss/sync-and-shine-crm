@@ -205,6 +205,57 @@ export type Database = {
           },
         ]
       }
+      monthly_closures: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          pj_user_id: string
+          reference_month: string
+          status: string
+          tasks_count: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          pj_user_id: string
+          reference_month: string
+          status?: string
+          tasks_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          pj_user_id?: string
+          reference_month?: string
+          status?: string
+          tasks_count?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
@@ -416,6 +467,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      task_templates: {
+        Row: {
+          checklist_items: string[] | null
+          created_at: string
+          created_by: string | null
+          default_estimated_hours: number | null
+          default_priority: Database["public"]["Enums"]["task_priority"]
+          default_service_value: number | null
+          default_tags: string[] | null
+          default_task_type: Database["public"]["Enums"]["task_type"]
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          checklist_items?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          default_estimated_hours?: number | null
+          default_priority?: Database["public"]["Enums"]["task_priority"]
+          default_service_value?: number | null
+          default_tags?: string[] | null
+          default_task_type?: Database["public"]["Enums"]["task_type"]
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          checklist_items?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          default_estimated_hours?: number | null
+          default_priority?: Database["public"]["Enums"]["task_priority"]
+          default_service_value?: number | null
+          default_tags?: string[] | null
+          default_task_type?: Database["public"]["Enums"]["task_type"]
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       tasks: {
         Row: {
