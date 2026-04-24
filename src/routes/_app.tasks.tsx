@@ -967,6 +967,7 @@ function TaskSidePanel({
   navigate: ReturnType<typeof useNavigate>;
 }) {
   const { isAdmin } = useAuth();
+  const { play: playSound } = useSound();
   const [task, setTask] = useState<TaskRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
@@ -977,12 +978,15 @@ function TaskSidePanel({
   const [newChecklist, setNewChecklist] = useState("");
   const [newTag, setNewTag] = useState("");
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
-  const [tab, setTab] = useState<"details" | "comments" | "checklist" | "attachments" | "time">("details");
+  const [leftTab, setLeftTab] = useState<"details" | "checklist" | "time">("details");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
 
   const loadPanel = useCallback(async () => {
     setLoading(true);
@@ -1005,6 +1009,23 @@ function TaskSidePanel({
 
   useEffect(() => { void loadPanel(); }, [loadPanel]);
 
+  // Realtime comments
+  useEffect(() => {
+    const channel = supabase.channel(`task_comments_${taskId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments", filter: `task_id=eq.${taskId}` }, (payload) => {
+        const newMsg = payload.new as Comment;
+        setComments((prev) => [...prev, newMsg]);
+        if (newMsg.author_id !== user?.id) playSound("new_comment");
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [taskId, user?.id]);
+
+  // Auto scroll chat
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments]);
+
   const update = async (patch: Partial<TaskRow>) => {
     if (!task) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1019,14 +1040,36 @@ function TaskSidePanel({
   const canEdit = isManagerOrAdmin || user?.id === task?.created_by || user?.id === task?.assignee_id;
   const canDelete = isAdmin || user?.id === task?.created_by;
 
-  const addComment = async () => {
+  const sendComment = async () => {
     if (!user || !newComment.trim() || !task) return;
-    const { data, error } = await supabase.from("comments").insert([{ task_id: task.id, author_id: user.id, content: newComment.trim() }]).select().single();
-    if (error) { toast.error(error.message); return; }
-    setComments((c) => [...c, data as Comment]);
+    const content = newComment.trim();
     setNewComment("");
-    void runAutomations({ trigger: "comment_added", task: task as unknown as Record<string, unknown>, comment: { content: newComment.trim(), author_id: user.id }, userId: user.id, userName: authProfile?.full_name ?? undefined });
+    const { error } = await supabase.from("comments").insert([{ task_id: task.id, author_id: user.id, content }]);
+    if (error) { toast.error(error.message); setNewComment(content); return; }
+    void runAutomations({ trigger: "comment_added", task: task as unknown as Record<string, unknown>, comment: { content, author_id: user.id }, userId: user.id, userName: authProfile?.full_name ?? undefined });
   };
+
+  const handleCommentKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendComment(); }
+    const val = (e.target as HTMLTextAreaElement).value;
+    const lastAt = val.lastIndexOf("@");
+    if (lastAt !== -1) {
+      const after = val.slice(lastAt + 1);
+      if (!after.includes(" ")) setMentionSearch(after.toLowerCase());
+      else setMentionSearch(null);
+    } else setMentionSearch(null);
+  };
+
+  const insertMention = (name: string) => {
+    const lastAt = newComment.lastIndexOf("@");
+    setNewComment(newComment.slice(0, lastAt + 1) + name + " ");
+    setMentionSearch(null);
+    commentRef.current?.focus();
+  };
+
+  const mentionResults = mentionSearch !== null
+    ? profiles.filter((p) => p.full_name?.toLowerCase().includes(mentionSearch)).slice(0, 5)
+    : [];
 
   const addChecklist = async () => {
     if (!newChecklist.trim()) return;
@@ -1091,20 +1134,35 @@ function TaskSidePanel({
     setSubtaskTitle(""); setAddingSubtask(false);
   };
 
+  const renderCommentContent = (content: string) => {
+    const parts = content.split(/(@\S+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("@")) {
+        const name = part.slice(1);
+        const found = profiles.find((p) => p.full_name?.toLowerCase() === name.toLowerCase());
+        if (found) return <span key={i} className="text-primary font-medium bg-primary/10 rounded px-0.5">{part}</span>;
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
   const checklistDone = checklist.filter((c) => c.done).length;
+  const assignee = profileById(task?.assignee_id ?? null);
+  const creator = profileById(task?.created_by ?? null);
 
-  const tabs: { id: typeof tab; label: string; icon: React.ElementType; count?: number }[] = [
-    { id: "details", label: "Detalhes", icon: Edit3 },
-    { id: "comments", label: "Comentários", icon: MessageSquare, count: comments.length },
-    { id: "checklist", label: "Checklist", icon: ClipboardCheck, count: checklist.length },
-    { id: "attachments", label: "Anexos", icon: Paperclip },
-    { id: "time", label: "Tempo", icon: Clock },
-  ];
+  // Group comments by date
+  const groupedComments: { date: string; msgs: Comment[] }[] = [];
+  for (const m of comments) {
+    const d = new Date(m.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+    const last = groupedComments[groupedComments.length - 1];
+    if (last?.date === d) last.msgs.push(m);
+    else groupedComments.push({ date: d, msgs: [m] });
+  }
 
   if (loading) {
     return (
-      <div className="w-[460px] shrink-0 border rounded-xl bg-background flex items-center justify-center shadow-lg">
+      <div className="w-[860px] shrink-0 border rounded-xl bg-background flex items-center justify-center shadow-lg">
         <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -1112,394 +1170,509 @@ function TaskSidePanel({
 
   if (!task) return null;
 
+  const proj = projects.find((p) => p.id === task.project_id);
+
   return (
-    <div className="w-[460px] shrink-0 border rounded-xl bg-background flex flex-col max-h-[calc(100vh-140px)] overflow-hidden shadow-xl">
-      {/* Panel header */}
-      <div className="p-4 border-b bg-muted/10 shrink-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              <Badge variant="outline" className={cn("text-xs", STATUS_COLOR[task.status])}>{STATUS_LABEL[task.status]}</Badge>
-              <Badge className={cn("text-xs", PRIORITY_COLOR[task.priority])}>{PRIORITY_LABEL[task.priority]}</Badge>
-              {task.task_type === "external" && (
-                <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700">
-                  PJ{task.service_value ? ` · ${formatBRL(task.service_value)}` : ""}
-                </Badge>
-              )}
-            </div>
-            {editingTitle ? (
-              <input
-                className="w-full text-base font-semibold bg-transparent border-b-2 border-primary outline-none"
-                value={titleDraft}
-                autoFocus
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={async () => {
-                  setEditingTitle(false);
-                  if (titleDraft.trim() && titleDraft !== task.title) await update({ title: titleDraft.trim() });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  if (e.key === "Escape") { setTitleDraft(task.title); setEditingTitle(false); }
-                }}
-              />
-            ) : (
-              <div
-                className={cn("text-base font-semibold leading-tight line-clamp-2 group flex items-start gap-1", canEdit && "cursor-text hover:text-primary")}
-                onClick={() => { if (canEdit) setEditingTitle(true); }}
-              >
-                <span className="flex-1">{task.title}</span>
-                {canEdit && <Edit3 className="h-3.5 w-3.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity" />}
-              </div>
-            )}
-          </div>
-          {/* Controls */}
-          <div className="flex items-center gap-1 shrink-0">
-            {activeTimer ? (
-              <button onClick={stopTimer} className="flex items-center gap-1 text-xs bg-rose-100 text-rose-700 rounded-md px-2 py-1 hover:bg-rose-200 font-medium">
-                <Square className="h-3 w-3" /> Parar
-              </button>
-            ) : (
-              <button onClick={startTimer} className="flex items-center gap-1 text-xs text-muted-foreground rounded-md px-2 py-1 hover:bg-muted border font-medium">
-                <Play className="h-3 w-3" /> Timer
-              </button>
-            )}
-            <button onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Abrir página completa">
-              <ExternalLink className="h-4 w-4" />
+    <div className="w-[860px] shrink-0 border rounded-xl bg-background flex flex-col max-h-[calc(100vh-140px)] overflow-hidden shadow-xl">
+
+      {/* ── Top bar ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/5 shrink-0">
+        <div className="flex-1 min-w-0">
+          {editingTitle ? (
+            <input
+              className="w-full text-base font-semibold bg-transparent border-b-2 border-primary outline-none"
+              value={titleDraft}
+              autoFocus
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={async () => {
+                setEditingTitle(false);
+                if (titleDraft.trim() && titleDraft !== task.title) await update({ title: titleDraft.trim() });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") { setTitleDraft(task.title); setEditingTitle(false); }
+              }}
+            />
+          ) : (
+            <h2
+              className={cn("text-base font-semibold truncate group flex items-center gap-1.5", canEdit && "cursor-text hover:text-primary")}
+              onClick={() => { if (canEdit) setEditingTitle(true); }}
+            >
+              {task.title}
+              {canEdit && <Edit3 className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-40" />}
+            </h2>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {activeTimer ? (
+            <button onClick={stopTimer} className="flex items-center gap-1 text-xs bg-rose-100 text-rose-700 rounded-md px-2 py-1 hover:bg-rose-200 font-medium">
+              <Square className="h-3 w-3" /> Parar timer
             </button>
-            <button onClick={() => { void navigator.clipboard.writeText(window.location.origin + `/tasks/${task.id}`); toast.success("Link copiado!"); }} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Copiar link">
-              <Copy className="h-4 w-4" />
+          ) : (
+            <button onClick={startTimer} className="flex items-center gap-1 text-xs text-muted-foreground rounded-md px-2 py-1 hover:bg-muted border font-medium">
+              <Play className="h-3 w-3" /> Timer
             </button>
-            <button onClick={onClose} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          )}
+          <button onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })} className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Abrir página completa">
+            <ExternalLink className="h-4 w-4" />
+          </button>
+          <button onClick={() => { void navigator.clipboard.writeText(window.location.origin + `/tasks/${task.id}`); toast.success("Link copiado!"); }} className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Copiar link">
+            <Copy className="h-4 w-4" />
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-muted text-muted-foreground">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b overflow-x-auto shrink-0 bg-background">
-        {tabs.map(({ id, label, icon: Icon, count }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors shrink-0",
-              tab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+      {/* ── Body: left info + right chat ─────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── LEFT PANEL ──────────────────────────────────────── */}
+        <div className="w-[320px] shrink-0 border-r flex flex-col overflow-hidden">
+
+          {/* Status + priority badges */}
+          <div className="flex flex-wrap gap-1.5 px-4 pt-3 pb-2 border-b shrink-0">
+            <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })} disabled={!canEdit}>
+              <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1", STATUS_COLOR[task.status])}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })} disabled={!canEdit}>
+              <SelectTrigger className={cn("h-6 text-xs border-0 px-2 py-0 font-medium w-auto gap-1", PRIORITY_COLOR[task.priority])}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {task.task_type === "external" && (
+              <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 h-6">
+                PJ{task.service_value ? ` · ${formatBRL(task.service_value)}` : ""}
+              </Badge>
             )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-            {typeof count === "number" && count > 0 && (
-              <span className="bg-muted text-muted-foreground rounded-full text-[10px] px-1.5 min-w-[18px] text-center">{count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+          {/* Left tabs */}
+          <div className="flex border-b shrink-0">
+            {([["details", "Tarefa", Edit3], ["checklist", "Checklist", ClipboardCheck], ["time", "Tempo", Clock]] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                onClick={() => setLeftTab(id)}
+                className={cn(
+                  "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors",
+                  leftTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+                {id === "checklist" && checklist.length > 0 && (
+                  <span className="text-[10px] bg-muted rounded-full px-1">{checklistDone}/{checklist.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
 
-        {/* DETAILS */}
-        {tab === "details" && (
-          <div className="p-4 space-y-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Descrição</label>
-              <Textarea
-                className="mt-1 text-sm resize-none"
-                rows={3}
-                value={task.description ?? ""}
-                onChange={(e) => setTask({ ...task, description: e.target.value })}
-                onBlur={(e) => void update({ description: e.target.value || null })}
-                placeholder="Adicionar descrição..."
-                disabled={!canEdit}
-              />
-            </div>
-
-            {/* Body images */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Imagens</label>
-              <TaskBodyImages
-                taskId={task.id}
-                images={[]}
-                onChange={() => {}}
-                disabled={!canEdit}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Status</label>
-                <Select value={task.status} onValueChange={(v) => void update({ status: v as TaskStatus })} disabled={!canEdit}>
-                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Prioridade</label>
-                <Select value={task.priority} onValueChange={(v) => void update({ priority: v as TaskPriority })} disabled={!canEdit}>
-                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Responsável</label>
-                <Select
-                  value={task.assignee_id ?? "none"}
-                  onValueChange={(v) => {
-                    const newId = v === "none" ? null : v;
-                    const p = profiles.find((x) => x.id === newId);
-                    const patch: Partial<TaskRow> = { assignee_id: newId };
-                    if (p?.contract_type === "pj") patch.task_type = "external";
-                    else if (p?.contract_type === "clt") patch.task_type = "internal";
-                    void update(patch);
-                  }}
-                  disabled={!isManagerOrAdmin}
-                >
-                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" className="text-xs">Sem responsável</SelectItem>
-                    {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}{p.contract_type === "pj" ? " (PJ)" : ""}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><FolderKanban className="h-3 w-3" /> Projeto</label>
-                <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })} disabled={!canEdit}>
-                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none" className="text-xs">Sem projeto</SelectItem>
-                    {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Prazo</label>
-                <Input type="date" className="mt-1 h-8 text-xs" value={task.due_date ? task.due_date.slice(0, 10) : ""} onChange={(e) => void update({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })} disabled={!canEdit} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Horas estimadas</label>
-                <Input type="number" step="0.25" className="mt-1 h-8 text-xs" value={task.estimated_hours ?? ""} onChange={(e) => setTask({ ...task, estimated_hours: e.target.value ? Number(e.target.value) : null })} onBlur={(e) => void update({ estimated_hours: e.target.value ? Number(e.target.value) : null })} disabled={!canEdit} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-                <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEdit}>
-                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
-                    <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {task.task_type === "external" && (
+          {/* Left content */}
+          <div className="flex-1 overflow-y-auto">
+            {leftTab === "details" && (
+              <div className="p-4 space-y-3">
+                {/* Description */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Valor (R$)</label>
-                  <Input type="number" step="0.01" min="0" className="mt-1 h-8 text-xs" value={task.service_value ?? ""} onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })} onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })} disabled={!canEdit} />
-                </div>
-              )}
-            </div>
-
-            {/* Tags */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Tag className="h-3 w-3" /> Tags</label>
-              <div className="flex flex-wrap gap-1 mt-1 mb-1.5">
-                {(task.tags ?? []).map((tag) => (
-                  <span key={tag} className="flex items-center gap-0.5 text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5">
-                    {tag}
-                    {canEdit && <button onClick={() => removeTag(tag)} className="hover:text-rose-500 ml-0.5"><X className="h-2.5 w-2.5" /></button>}
-                  </span>
-                ))}
-              </div>
-              {canEdit && (
-                <div className="flex gap-1">
-                  <Input className="h-7 text-xs flex-1" placeholder="Nova tag..." value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())} />
-                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={addTag} disabled={!newTag.trim()}><Plus className="h-3 w-3" /></Button>
-                </div>
-              )}
-            </div>
-
-            {/* Subtasks */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-muted-foreground">Subtarefas ({subtasks.length})</label>
-                <button onClick={() => setAddingSubtask(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5"><Plus className="h-3 w-3" /> Adicionar</button>
-              </div>
-              {subtasks.map((s) => (
-                <div key={s.id} className="flex items-center gap-2 py-1 border-b last:border-0">
-                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
-                  <span className={cn("text-xs flex-1 truncate", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
-                  <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
-                </div>
-              ))}
-              {addingSubtask && (
-                <div className="flex gap-1 mt-1">
-                  <Input
-                    className="h-7 text-xs flex-1"
-                    placeholder="Título da subtarefa..."
-                    value={subtaskTitle}
-                    onChange={(e) => setSubtaskTitle(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSubtask(); } if (e.key === "Escape") { setAddingSubtask(false); setSubtaskTitle(""); } }}
-                    autoFocus
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
+                  <Textarea
+                    className="mt-1 text-sm resize-none"
+                    rows={3}
+                    value={task.description ?? ""}
+                    onChange={(e) => setTask({ ...task, description: e.target.value })}
+                    onBlur={(e) => void update({ description: e.target.value || null })}
+                    placeholder="Adicionar descrição..."
+                    disabled={!canEdit}
                   />
-                  <Button size="sm" className="h-7 px-2" onClick={addSubtask} disabled={!subtaskTitle.trim()}>OK</Button>
-                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setAddingSubtask(false); setSubtaskTitle(""); }}><X className="h-3 w-3" /></Button>
                 </div>
-              )}
-            </div>
 
-            {/* Footer actions */}
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-              {canDelete && (
-                <Button size="sm" variant="outline" className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir tarefa
-                </Button>
-              )}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              Criada em {formatDateTime(task.created_at)}
-              {task.completed_at && ` · Concluída em ${formatDateTime(task.completed_at)}`}
-              {!canEdit && " · Você pode comentar mas não editar esta tarefa."}
-            </div>
-          </div>
-        )}
-
-        {/* COMMENTS */}
-        {tab === "comments" && (
-          <div className="p-4 flex flex-col gap-3">
-            {comments.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-25" />
-                Nenhum comentário.
-              </div>
-            )}
-            {comments.map((c) => {
-              const author = profileById(c.author_id);
-              const isOwn = c.author_id === user?.id;
-              return (
-                <div key={c.id} className="flex gap-2.5 group">
-                  <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="text-[10px]">{initials(author?.full_name)}</AvatarFallback></Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-1">
-                      <span className="text-xs font-medium">{author?.full_name ?? "—"}</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-muted-foreground">{formatDateTime(c.created_at)}</span>
-                        {isOwn && (
-                          <button
-                            onClick={async () => { await supabase.from("comments").delete().eq("id", c.id); setComments((cc) => cc.filter((x) => x.id !== c.id)); }}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
+                {/* Meta fields — Bitrix style row layout */}
+                <div className="space-y-2.5">
+                  {/* Owner/Creator */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs">Criado por</span>
+                    <div className="flex items-center gap-1.5">
+                      <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(creator?.full_name)}</AvatarFallback></Avatar>
+                      <span className="text-xs font-medium">{creator?.full_name ?? "—"}</span>
                     </div>
-                    <p className="text-xs mt-1 whitespace-pre-wrap bg-muted/40 rounded-lg px-2.5 py-2">{c.content}</p>
                   </div>
-                </div>
-              );
-            })}
-            <div className="flex gap-2 border-t pt-3 sticky bottom-0 bg-background pb-2">
-              <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="text-[10px]">{initials(authProfile?.full_name)}</AvatarFallback></Avatar>
-              <div className="flex-1">
-                <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Comentar..." rows={2} className="text-sm resize-none"
-                  onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void addComment(); } }} />
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-[10px] text-muted-foreground">Ctrl+Enter para enviar</span>
-                  <Button size="sm" className="h-7 text-xs" onClick={addComment} disabled={!newComment.trim()}>
-                    <Send className="h-3 w-3 mr-1" /> Enviar
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* CHECKLIST */}
-        {tab === "checklist" && (
-          <div className="p-4 space-y-3">
-            {checklist.length > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.round((checklistDone / checklist.length) * 100)}%` }} />
+                  {/* Assignee */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs">Responsável</span>
+                    <Select
+                      value={task.assignee_id ?? "none"}
+                      onValueChange={(v) => {
+                        const newId = v === "none" ? null : v;
+                        const p = profiles.find((x) => x.id === newId);
+                        const patch: Partial<TaskRow> = { assignee_id: newId };
+                        if (p?.contract_type === "pj") patch.task_type = "external";
+                        else if (p?.contract_type === "clt") patch.task_type = "internal";
+                        void update(patch);
+                      }}
+                      disabled={!isManagerOrAdmin}
+                    >
+                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Avatar className="h-4 w-4 shrink-0"><AvatarFallback className="text-[8px]">{initials(assignee?.full_name)}</AvatarFallback></Avatar>
+                          <span className="truncate">{assignee?.full_name ?? "Nenhum"}</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">Sem responsável</SelectItem>
+                        {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Due date */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Prazo</span>
+                    <Input
+                      type="date"
+                      className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[140px] px-2"
+                      value={task.due_date ? task.due_date.slice(0, 10) : ""}
+                      onChange={(e) => void update({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                      disabled={!canEdit}
+                    />
+                  </div>
+
+                  {/* Project */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs flex items-center gap-1"><FolderKanban className="h-3 w-3" /> Projeto</span>
+                    <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })} disabled={!canEdit}>
+                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
+                        <div className="flex items-center gap-1.5 truncate">
+                          {proj && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: proj.color ?? "#3b82f6" }} />}
+                          <span className="truncate">{proj?.name ?? "Nenhum"}</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">Sem projeto</SelectItem>
+                        {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Estimated hours */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs">Horas est.</span>
+                    <Input
+                      type="number" step="0.25" min="0"
+                      className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[100px] px-2"
+                      value={task.estimated_hours ?? ""}
+                      onChange={(e) => setTask({ ...task, estimated_hours: e.target.value ? Number(e.target.value) : null })}
+                      onBlur={(e) => void update({ estimated_hours: e.target.value ? Number(e.target.value) : null })}
+                      disabled={!canEdit}
+                    />
+                  </div>
+
+                  {/* Type + value */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground text-xs">Tipo</span>
+                    <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEdit}>
+                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
+                        <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {task.task_type === "external" && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground text-xs">Valor (R$)</span>
+                      <Input
+                        type="number" step="0.01" min="0"
+                        className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"
+                        value={task.service_value ?? ""}
+                        onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
+                        onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })}
+                        disabled={!canEdit}
+                      />
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">{checklistDone}/{checklist.length}</span>
+
+                {/* Tags */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Tag className="h-3 w-3" /> Tags</label>
+                  <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+                    {(task.tags ?? []).map((tag) => (
+                      <span key={tag} className="flex items-center gap-0.5 text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                        {tag}
+                        {canEdit && <button onClick={() => removeTag(tag)} className="hover:text-rose-500 ml-0.5"><X className="h-2.5 w-2.5" /></button>}
+                      </span>
+                    ))}
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-1">
+                      <Input className="h-7 text-xs flex-1" placeholder="Nova tag..." value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())} />
+                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={addTag} disabled={!newTag.trim()}><Plus className="h-3 w-3" /></Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtasks */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Subtarefas ({subtasks.length})</label>
+                    <button onClick={() => setAddingSubtask(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5"><Plus className="h-3 w-3" /> Adicionar</button>
+                  </div>
+                  {subtasks.map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 py-1 border-b last:border-0">
+                      <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
+                      <span className={cn("text-xs flex-1 truncate", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
+                      <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
+                    </div>
+                  ))}
+                  {addingSubtask && (
+                    <div className="flex gap-1 mt-1">
+                      <Input className="h-7 text-xs flex-1" placeholder="Título da subtarefa..." value={subtaskTitle}
+                        onChange={(e) => setSubtaskTitle(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSubtask(); } if (e.key === "Escape") { setAddingSubtask(false); setSubtaskTitle(""); } }}
+                        autoFocus />
+                      <Button size="sm" className="h-7 px-2" onClick={addSubtask} disabled={!subtaskTitle.trim()}>OK</Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setAddingSubtask(false); setSubtaskTitle(""); }}><X className="h-3 w-3" /></Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attachments */}
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                    <Paperclip className="h-3 w-3" /> Arquivos
+                  </label>
+                  <TaskAttachments taskId={taskId} createdBy={task.created_by} />
+                </div>
+
+                {/* Footer */}
+                <div className="pt-2 border-t space-y-1">
+                  <div className="text-[10px] text-muted-foreground">
+                    ID: {task.id.slice(0, 8).toUpperCase()} · Criada em {formatDateTime(task.created_at)}
+                    {task.completed_at && ` · Concluída ${formatDateTime(task.completed_at)}`}
+                  </div>
+                  {canDelete && (
+                    <button onClick={() => setDeleteOpen(true)} className="text-xs text-destructive hover:underline flex items-center gap-1">
+                      <Trash2 className="h-3 w-3" /> Excluir tarefa
+                    </button>
+                  )}
+                </div>
               </div>
             )}
-            {checklist.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <ClipboardCheck className="h-8 w-8 mx-auto mb-2 opacity-25" />
-                Checklist vazio.
-              </div>
-            )}
-            <div className="space-y-1">
-              {checklist.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 py-1 px-1 rounded group hover:bg-muted/30">
-                  <Checkbox checked={c.done} onCheckedChange={(v) => void toggleChecklist(c.id, !!v)} className="h-4 w-4" />
-                  <span className={cn("text-sm flex-1", c.done && "line-through text-muted-foreground")}>{c.text}</span>
-                  <button onClick={() => deleteChecklist(c.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2 border-t pt-3">
-              <Input className="text-sm" placeholder="Novo item..." value={newChecklist} onChange={(e) => setNewChecklist(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addChecklist())} />
-              <Button size="sm" onClick={addChecklist} disabled={!newChecklist.trim()}><Plus className="h-4 w-4" /></Button>
-            </div>
-          </div>
-        )}
 
-        {/* ATTACHMENTS */}
-        {tab === "attachments" && (
-          <div className="p-4">
-            <TaskAttachments taskId={taskId} />
-          </div>
-        )}
-
-        {/* TIME */}
-        {tab === "time" && (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-              <div>
-                <div className="text-2xl font-bold tabular-nums">{Math.floor(totalMin / 60)}h {totalMin % 60}m</div>
-                <div className="text-xs text-muted-foreground">Total registrado</div>
-                {task.estimated_hours && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Estimado: {task.estimated_hours}h
-                    {totalMin > task.estimated_hours * 60 && <span className="text-rose-500 ml-1 font-medium">· excedeu</span>}
+            {leftTab === "checklist" && (
+              <div className="p-4 space-y-3">
+                {checklist.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 transition-all rounded-full" style={{ width: `${Math.round((checklistDone / checklist.length) * 100)}%` }} />
+                    </div>
+                    <span className="text-xs font-medium tabular-nums">{checklistDone}/{checklist.length}</span>
                   </div>
                 )}
-              </div>
-              {activeTimer ? (
-                <Button size="sm" variant="destructive" onClick={stopTimer}><Square className="h-3 w-3 mr-1" /> Parar</Button>
-              ) : (
-                <Button size="sm" onClick={startTimer}><Play className="h-3 w-3 mr-1" /> Iniciar</Button>
-              )}
-            </div>
-            {timeEntries.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
-                Nenhum tempo registrado.
+                {checklist.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    <ClipboardCheck className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    Nenhum item.
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {checklist.map((c) => (
+                    <div key={c.id} className="flex items-center gap-2 py-1 px-1 rounded group hover:bg-muted/30">
+                      <Checkbox checked={c.done} onCheckedChange={(v) => void toggleChecklist(c.id, !!v)} className="h-4 w-4" />
+                      <span className={cn("text-sm flex-1", c.done && "line-through text-muted-foreground")}>{c.text}</span>
+                      <button onClick={() => deleteChecklist(c.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 border-t pt-3">
+                  <Input className="text-sm" placeholder="Novo item..." value={newChecklist}
+                    onChange={(e) => setNewChecklist(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addChecklist())} />
+                  <Button size="sm" onClick={addChecklist} disabled={!newChecklist.trim()}><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
             )}
-            <div className="space-y-1">
-              {timeEntries.map((te) => {
-                const p = profileById(te.user_id);
-                return (
-                  <div key={te.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
-                    <div className="flex items-center gap-1.5">
-                      <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(p?.full_name)}</AvatarFallback></Avatar>
-                      <span className="text-xs text-muted-foreground">{p?.full_name ?? "—"}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-medium">{te.duration_minutes ? `${te.duration_minutes}m` : <span className="text-amber-600 animate-pulse">em curso...</span>}</div>
-                      <div className="text-[10px] text-muted-foreground">{formatDateTime(te.started_at)}</div>
-                    </div>
+
+            {leftTab === "time" && (
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <div className="text-2xl font-bold tabular-nums">{Math.floor(totalMin / 60)}h {totalMin % 60}m</div>
+                    <div className="text-xs text-muted-foreground">Total registrado</div>
+                    {task.estimated_hours && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Estimado: {task.estimated_hours}h
+                        {totalMin > task.estimated_hours * 60 && <span className="text-rose-500 ml-1 font-medium">· excedeu</span>}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
+                  {activeTimer ? (
+                    <Button size="sm" variant="destructive" onClick={stopTimer}><Square className="h-3 w-3 mr-1" /> Parar</Button>
+                  ) : (
+                    <Button size="sm" onClick={startTimer}><Play className="h-3 w-3 mr-1" /> Iniciar</Button>
+                  )}
+                </div>
+                {timeEntries.length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    Nenhum tempo registrado.
+                  </div>
+                )}
+                {timeEntries.map((te) => {
+                  const p = profileById(te.user_id);
+                  return (
+                    <div key={te.id} className="flex items-center justify-between py-1.5 border-b last:border-0">
+                      <div className="flex items-center gap-1.5">
+                        <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(p?.full_name)}</AvatarFallback></Avatar>
+                        <span className="text-xs">{p?.full_name ?? "—"}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-medium">{te.duration_minutes ? `${te.duration_minutes}m` : <span className="text-amber-600 animate-pulse">em curso…</span>}</div>
+                        <div className="text-[10px] text-muted-foreground">{formatDateTime(te.started_at)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── RIGHT PANEL — Chat estilo Bitrix ────────────────── */}
+        <div className="flex-1 flex flex-col bg-muted/5 overflow-hidden">
+          {/* Chat header */}
+          <div className="px-4 py-2.5 border-b bg-background shrink-0 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Bate-papo da tarefa</span>
+              <span className="text-xs text-muted-foreground">{comments.length} mensagem{comments.length !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="flex items-center -space-x-1">
+              {profiles.slice(0, 4).map((p) => (
+                <Avatar key={p.id} className="h-6 w-6 border-2 border-background">
+                  <AvatarFallback className="text-[9px]">{initials(p.full_name)}</AvatarFallback>
+                </Avatar>
+              ))}
             </div>
           </div>
-        )}
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+            {comments.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <MessageSquare className="h-10 w-10 mb-2 opacity-20" />
+                <p className="text-sm">Nenhuma mensagem ainda.</p>
+                <p className="text-xs">Comece a conversa sobre esta tarefa.</p>
+              </div>
+            )}
+
+            {groupedComments.map(({ date, msgs }) => (
+              <div key={date}>
+                {/* Date divider */}
+                <div className="flex items-center gap-2 my-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[11px] text-muted-foreground bg-muted/5 px-2">{date}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {msgs.map((m, idx) => {
+                  const isOwn = m.author_id === user?.id;
+                  const author = profileById(m.author_id);
+                  const showAvatar = idx === 0 || msgs[idx - 1].author_id !== m.author_id;
+                  return (
+                    <div key={m.id} className={cn("flex gap-2 group", isOwn && "flex-row-reverse", !showAvatar && "mt-0.5")}>
+                      <div className="w-8 shrink-0">
+                        {showAvatar && (
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-[10px]">{initials(author?.full_name)}</AvatarFallback>
+                          </Avatar>
+                        )}
+                      </div>
+                      <div className={cn("max-w-[75%]", isOwn && "flex flex-col items-end")}>
+                        {showAvatar && (
+                          <div className={cn("flex items-baseline gap-2 mb-0.5", isOwn && "flex-row-reverse")}>
+                            <span className="text-xs font-medium">{isOwn ? "Você" : (author?.full_name ?? "—")}</span>
+                            <span className="text-[10px] text-muted-foreground">{formatDateTime(m.created_at)}</span>
+                          </div>
+                        )}
+                        <div className={cn(
+                          "rounded-2xl px-3 py-2 text-sm leading-relaxed relative",
+                          isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-background border rounded-tl-sm shadow-sm",
+                        )}>
+                          <span className="whitespace-pre-wrap break-words">{renderCommentContent(m.content)}</span>
+                          {(isOwn || isManagerOrAdmin) && (
+                            <button
+                              onClick={async () => { await supabase.from("comments").delete().eq("id", m.id); setComments((c) => c.filter((x) => x.id !== m.id)); }}
+                              className={cn(
+                                "absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive",
+                                isOwn ? "-left-6" : "-right-6"
+                              )}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+            <div ref={chatBottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t bg-background px-3 py-2.5 shrink-0 relative">
+            {/* Mention autocomplete */}
+            {mentionSearch !== null && mentionResults.length > 0 && (
+              <div className="absolute bottom-full mb-1 left-3 w-52 bg-background border rounded-xl shadow-xl z-50 overflow-hidden">
+                {mentionResults.map((p) => (
+                  <button key={p.id} onClick={() => insertMention(p.full_name ?? "")}
+                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-muted text-left text-sm">
+                    <Avatar className="h-5 w-5 shrink-0"><AvatarFallback className="text-[9px]">{initials(p.full_name)}</AvatarFallback></Avatar>
+                    {p.full_name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <Textarea
+                ref={commentRef}
+                value={newComment}
+                onChange={(e) => {
+                  setNewComment(e.target.value);
+                  const val = e.target.value;
+                  const lastAt = val.lastIndexOf("@");
+                  if (lastAt !== -1) {
+                    const after = val.slice(lastAt + 1);
+                    if (!after.includes(" ")) setMentionSearch(after.toLowerCase());
+                    else setMentionSearch(null);
+                  } else setMentionSearch(null);
+                }}
+                onKeyDown={handleCommentKey}
+                placeholder="Digite @ ou + para mencionar uma pessoa... Enter para enviar"
+                rows={1}
+                className="resize-none text-sm flex-1 border-muted bg-muted/30 min-h-[38px] max-h-[100px]"
+              />
+              <Button size="sm" onClick={sendComment} disabled={!newComment.trim()} className="h-10 w-10 p-0 rounded-full shrink-0">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -1517,3 +1690,4 @@ function TaskSidePanel({
     </div>
   );
 }
+
