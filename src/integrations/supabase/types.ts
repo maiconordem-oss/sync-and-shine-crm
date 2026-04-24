@@ -456,6 +456,33 @@ export type Database = {
         }
         Relationships: []
       }
+      role_permissions: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          permission: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          permission: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          permission?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_dependencies: {
         Row: {
           blocked_by_task_id: string
