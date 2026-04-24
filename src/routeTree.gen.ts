@@ -19,6 +19,7 @@ import { Route as AppPaymentsRouteImport } from './routes/_app.payments'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppMembersRouteImport } from './routes/_app.members'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppChatRouteImport } from './routes/_app.chat'
 import { Route as AppAutomationsRouteImport } from './routes/_app.automations'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app.tasks.$taskId'
 
@@ -71,6 +72,11 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppChatRoute = AppChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAutomationsRoute = AppAutomationsRouteImport.update({
   id: '/automations',
   path: '/automations',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/automations': typeof AppAutomationsRoute
+  '/chat': typeof AppChatRoute
   '/dashboard': typeof AppDashboardRoute
   '/members': typeof AppMembersRoute
   '/notifications': typeof AppNotificationsRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/automations': typeof AppAutomationsRoute
+  '/chat': typeof AppChatRoute
   '/dashboard': typeof AppDashboardRoute
   '/members': typeof AppMembersRoute
   '/notifications': typeof AppNotificationsRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/_app/automations': typeof AppAutomationsRoute
+  '/_app/chat': typeof AppChatRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/members': typeof AppMembersRoute
   '/_app/notifications': typeof AppNotificationsRoute
@@ -129,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/automations'
+    | '/chat'
     | '/dashboard'
     | '/members'
     | '/notifications'
@@ -142,6 +152,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/automations'
+    | '/chat'
     | '/dashboard'
     | '/members'
     | '/notifications'
@@ -156,6 +167,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/_app/automations'
+    | '/_app/chat'
     | '/_app/dashboard'
     | '/_app/members'
     | '/_app/notifications'
@@ -244,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/chat': {
+      id: '/_app/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AppChatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/automations': {
       id: '/_app/automations'
       path: '/automations'
@@ -275,6 +294,7 @@ const AppTasksRouteWithChildren = AppTasksRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAutomationsRoute: typeof AppAutomationsRoute
+  AppChatRoute: typeof AppChatRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppMembersRoute: typeof AppMembersRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
@@ -286,6 +306,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAutomationsRoute: AppAutomationsRoute,
+  AppChatRoute: AppChatRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppMembersRoute: AppMembersRoute,
   AppNotificationsRoute: AppNotificationsRoute,
