@@ -147,7 +147,7 @@ function AppLayout() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto bg-background p-4 md:p-6">
+          <main className="flex-1 overflow-hidden bg-background p-4 md:p-6 flex flex-col">
             <Outlet />
           </main>
         </SidebarInset>
