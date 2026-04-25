@@ -1785,7 +1785,7 @@ function TaskSidePanel({
           {/* Arquivos */}
           {rightTab === "files" && (
             <div className="flex-1 overflow-y-auto p-5">
-              <TaskAttachments taskId={taskId} createdBy={isManagerOrAdmin ? undefined : "blocked"} />
+              <TaskAttachments taskId={taskId} canUpload={isManagerOrAdmin} />
             </div>
           )}
 

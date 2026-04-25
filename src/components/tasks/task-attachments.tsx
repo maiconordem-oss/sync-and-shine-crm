@@ -38,7 +38,7 @@ function FileIcon({ mime, name }: { mime: string | null; name: string }) {
 
 const isImage = (mime: string | null) => mime?.startsWith("image/") ?? false;
 
-export function TaskAttachments({ taskId, createdBy }: { taskId: string; createdBy?: string | null }) {
+export function TaskAttachments({ taskId, createdBy, canUpload: canUploadProp }: { taskId: string; createdBy?: string | null; canUpload?: boolean }) {
   const { user, isManagerOrAdmin } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -46,7 +46,7 @@ export function TaskAttachments({ taskId, createdBy }: { taskId: string; created
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const canUpload = !createdBy || user?.id === createdBy || isManagerOrAdmin;
+  const canUpload = canUploadProp !== undefined ? canUploadProp : (!createdBy || user?.id === createdBy || isManagerOrAdmin);
   const canDelete = (a: Attachment) => a.uploaded_by === user?.id || isManagerOrAdmin;
 
   // Global paste listener

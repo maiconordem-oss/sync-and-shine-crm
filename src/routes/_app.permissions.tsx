@@ -64,7 +64,6 @@ function PermissionsPage() {
       .order("role")
       .order("permission");
     if (error) {
-      console.error("[permissions] load error:", error);
       setTableReady(false);
       const defaultPerms: RolePerm[] = [];
       for (const [role, keys] of Object.entries(DEFAULT_ENABLED)) {
