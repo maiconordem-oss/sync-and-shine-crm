@@ -11,8 +11,10 @@ import { useAuth } from "@/lib/auth-context";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
 import { PRIORITY_LABEL } from "@/lib/labels";
-import { Plus, Trash2, Link2, ClipboardList, X } from "lucide-react";
+import { Plus, Trash2, Link2, ClipboardList, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
+import { TaskBodyImages, type BodyImage } from "@/components/tasks/task-body-images";
 
 interface Props {
   open: boolean;
@@ -56,6 +58,10 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   const [newLinkUrl, setNewLinkUrl] = useState("");
   const [newLinkTitle, setNewLinkTitle] = useState("");
 
+  // Body images
+  const [bodyImages, setBodyImages] = useState<BodyImage[]>([]);
+  const [showTemplatesManager, setShowTemplatesManager] = useState(false);
+
   // UI state
   const [activeSection, setActiveSection] = useState<"main" | "checklist" | "links">("main");
   const [busy, setBusy] = useState(false);
@@ -80,6 +86,7 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
     setDueDate(defaultDueDate()); setTaskType("internal"); setServiceValue("");
     setChecklistItems([]); setNewCheckItem("");
     setLinks([]); setNewLinkUrl(""); setNewLinkTitle("");
+    setBodyImages([]);
     setActiveSection("main");
   };
 
@@ -87,6 +94,16 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
     if (!newCheckItem.trim()) return;
     setChecklistItems((prev) => [...prev, newCheckItem.trim()]);
     setNewCheckItem("");
+  };
+
+  const applyTemplate = (t: TaskTemplate) => {
+    if (t.default_title && !title) setTitle(t.default_title);
+    if (t.description && !description) setDescription(t.description);
+    setPriority(t.default_priority);
+    setTaskType(t.default_task_type);
+    if (t.default_service_value) setServiceValue(String(t.default_service_value));
+    if (t.checklist_items?.length) setChecklistItems(t.checklist_items);
+    toast.success(`Modelo "${t.name}" aplicado!`);
   };
 
   const addLink = () => {
@@ -125,6 +142,20 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
 
     const taskId = (data as { id: string }).id;
 
+    // Upload body images
+    if (bodyImages.length > 0) {
+      await supabase.from("attachments").insert(
+        bodyImages.map((img) => ({
+          task_id: taskId,
+          uploaded_by: user.id,
+          file_name: img.name,
+          storage_path: img.path,
+          mime_type: "image/png",
+          size_bytes: null,
+        }))
+      );
+    }
+
     // Insert checklist items
     if (checklistItems.length > 0) {
       await supabase.from("checklists").insert(
@@ -154,10 +185,20 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
   ] as const;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-5 pb-0">
-          <DialogTitle className="text-lg">{parentTaskId ? "Nova subtarefa" : "Nova tarefa"}</DialogTitle>
+        <DialogHeader className="px-6 pt-5 pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="text-lg">{parentTaskId ? "Nova subtarefa" : "Nova tarefa"}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <TemplatePicker onApply={applyTemplate} />
+              <button type="button" onClick={() => setShowTemplatesManager(true)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border rounded-md px-2 py-1 hover:bg-muted">
+                <FileText className="h-3.5 w-3.5" /> Gerenciar modelos
+              </button>
+            </div>
+          </div>
         </DialogHeader>
 
         {/* Section tabs */}
@@ -191,6 +232,12 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
                   <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
                     rows={4} placeholder="Contexto, links, detalhes, SKU, anúncio..." />
                   <p className="text-xs text-muted-foreground">URLs na descrição viram links clicáveis automaticamente.</p>
+                </div>
+
+                {/* Imagens e documentos */}
+                <div className="space-y-1.5">
+                  <Label>Imagens e arquivos</Label>
+                  <TaskBodyImages images={bodyImages} onChange={setBodyImages} />
                 </div>
 
                 {/* Grid de campos */}
@@ -402,6 +449,12 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
         </form>
       </DialogContent>
     </Dialog>
+
+    <TaskTemplatesManager
+      open={showTemplatesManager}
+      onClose={() => setShowTemplatesManager(false)}
+    />
+  </>
   );
 }
 // Sat Apr 25 17:10:25 UTC 2026
