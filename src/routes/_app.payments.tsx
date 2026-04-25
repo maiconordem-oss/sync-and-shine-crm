@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Wallet, Trash2 } from "lucide-react";
+import { Plus, Wallet, Trash2, Pencil } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,7 +55,27 @@ function PaymentsPage() {
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" });
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const emptyForm = { description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  const openEdit = (p: Payment) => {
+    setEditing(p);
+    setForm({
+      description: p.description,
+      amount: String(p.amount),
+      beneficiary_user_id: p.beneficiary_user_id ?? "none",
+      beneficiary_name: p.beneficiary_name ?? "",
+      due_date: p.due_date ?? "",
+    });
+    setOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
 
   const load = async () => {
     const [p, pr] = await Promise.all([
@@ -82,21 +102,28 @@ function PaymentsPage() {
     return t;
   }, [payments]);
 
-  const create = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    const { error } = await supabase.from("payments").insert([{
+    const payload = {
       description: form.description,
       amount: Number(form.amount),
       beneficiary_user_id: form.beneficiary_user_id === "none" ? null : form.beneficiary_user_id,
       beneficiary_name: form.beneficiary_name || null,
       due_date: form.due_date || null,
-      created_by: user.id,
-    }]);
-    if (error) { toast.error(error.message); return; }
+    };
+    if (editing) {
+      const { error } = await supabase.from("payments").update(payload).eq("id", editing.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Pagamento atualizado!");
+    } else {
+      const { error } = await supabase.from("payments").insert([{ ...payload, created_by: user.id }]);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Pagamento criado!");
+    }
     setOpen(false);
-    setForm({ description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" });
-    toast.success("Pagamento criado!");
+    setEditing(null);
+    setForm(emptyForm);
     void load();
   };
 
@@ -133,7 +160,7 @@ function PaymentsPage() {
           <p className="text-sm text-muted-foreground">Controle financeiro vinculado às tarefas.</p>
         </div>
         {isManagerOrAdmin && can("payments.manage") && (
-          <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo pagamento</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Novo pagamento</Button>
         )}
       </div>
 
@@ -209,6 +236,9 @@ function PaymentsPage() {
                               {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)} title="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           {isAdmin && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -244,10 +274,10 @@ function PaymentsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(emptyForm); } }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo pagamento</DialogTitle></DialogHeader>
-          <form onSubmit={create} className="space-y-3">
+          <DialogHeader><DialogTitle>{editing ? "Editar pagamento" : "Novo pagamento"}</DialogTitle></DialogHeader>
+          <form onSubmit={submit} className="space-y-3">
             <div className="space-y-1.5">
               <Label>Descrição *</Label>
               <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
@@ -278,7 +308,7 @@ function PaymentsPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={!form.description || !form.amount}>Criar</Button>
+              <Button type="submit" disabled={!form.description || !form.amount}>{editing ? "Salvar" : "Criar"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
