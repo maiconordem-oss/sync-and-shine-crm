@@ -308,7 +308,7 @@ function PaymentsPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={!form.description || !form.amount}>Criar</Button>
+              <Button type="submit" disabled={!form.description || !form.amount}>{editing ? "Salvar" : "Criar"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
