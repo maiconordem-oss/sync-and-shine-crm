@@ -271,10 +271,10 @@ function PaymentsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm(emptyForm); } }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo pagamento</DialogTitle></DialogHeader>
-          <form onSubmit={create} className="space-y-3">
+          <DialogHeader><DialogTitle>{editing ? "Editar pagamento" : "Novo pagamento"}</DialogTitle></DialogHeader>
+          <form onSubmit={submit} className="space-y-3">
             <div className="space-y-1.5">
               <Label>Descrição *</Label>
               <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
