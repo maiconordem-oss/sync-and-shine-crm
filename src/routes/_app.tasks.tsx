@@ -1516,52 +1516,6 @@ function TaskSidePanel({
               <Play className="h-3 w-3" /> Timer
             </button>
           )}
-          {/* flow buttons moved to content area */}
-          {/* Criador/Gestor: Em revisão → aprovar ou devolver */}
-          {task.status === "in_review" && isManagerOrAdmin && (
-            <div className="flex gap-1">
-              <button
-                onClick={async () => {
-                  await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
-                  // Se tarefa PJ, criar pagamento automaticamente
-                  if (task.task_type === "external" && task.service_value && task.assignee_id) {
-                    const { data: existing } = await supabase.from("payments")
-                      .select("id").eq("task_id", task.id).eq("status", "pending").maybeSingle();
-                    if (!existing) {
-                      await supabase.from("payments").insert([{
-                        description: `Pagamento ref. tarefa: ${task.title}`,
-                        amount: task.service_value,
-                        beneficiary_user_id: task.assignee_id,
-                        status: "pending",
-                        due_date: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
-                        task_id: task.id,
-                        project_id: task.project_id,
-                        created_by: user?.id ?? null,
-                      }]);
-                      toast.success("✅ Tarefa concluída! Pagamento PJ registrado automaticamente.");
-                    } else {
-                      toast.success("✅ Tarefa concluída!");
-                    }
-                  } else {
-                    toast.success("✅ Tarefa concluída e aprovada!");
-                  }
-                }}
-                className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 rounded-md px-2 py-1 hover:bg-emerald-200 font-medium"
-              >
-                <CheckCircle2 className="h-3 w-3" /> Aprovar e concluir
-              </button>
-              <button
-                onClick={async () => {
-                  const note = window.prompt("Motivo da devolução (opcional):");
-                  await update({ status: "in_progress" as TaskStatus, returned_at: new Date().toISOString(), return_note: note ?? null });
-                  toast.success("Tarefa devolvida para edição.");
-                }}
-                className="flex items-center gap-1 text-xs bg-rose-100 text-rose-700 rounded-md px-2 py-1 hover:bg-rose-200 font-medium"
-              >
-                <XCircle className="h-3 w-3" /> Devolver para edição
-              </button>
-            </div>
-          )}
           <button onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })} className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Abrir página completa">
             <ExternalLink className="h-4 w-4" />
           </button>
