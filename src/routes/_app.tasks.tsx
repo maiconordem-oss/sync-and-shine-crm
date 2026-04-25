@@ -1222,7 +1222,7 @@ function TaskSidePanel({
   };
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
-  const canDelete = isAdmin || user?.id === task?.created_by;
+  const canDelete = isAdmin || user?.id === task?.created_by; // admin ou proprietário
   const isAssignee = user?.id === task?.assignee_id;
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
   const checklistDone = checklist.filter((c) => c.done).length;
@@ -1364,7 +1364,7 @@ function TaskSidePanel({
               <Play className="h-3.5 w-3.5" /> Timer
             </button>
           )}
-          {isManagerOrAdmin && canDelete && (
+          {canDelete && (
             <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Excluir">
               <Trash2 className="h-4 w-4" />
             </button>
