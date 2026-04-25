@@ -603,6 +603,42 @@ function PJRow({
             </div>
           )}
 
+          {/* Pagamentos avulsos (manuais, sem task vinculada) */}
+          {(() => {
+            const manuals = row.payments.filter((p) => !p.task_id);
+            if (manuals.length === 0) return null;
+            return (
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Pagamentos avulsos — {manuals.length} lançamento{manuals.length !== 1 ? "s" : ""}
+                </div>
+                <div className="space-y-2">
+                  {manuals.map((p) => (
+                    <div key={p.id} className="rounded-lg border bg-background p-3 flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium leading-snug">{p.description}</div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-muted-foreground">
+                          {p.due_date && <span>Vence: {formatDate(p.due_date)}</span>}
+                          {p.paid_date && <span>• Pago: {formatDate(p.paid_date)}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-base font-bold">{formatBRL(p.amount)}</div>
+                        <Badge className={cn("text-[10px] px-1.5 h-4 mt-0.5", {
+                          "bg-emerald-100 text-emerald-800": p.status === "paid",
+                          "bg-amber-100 text-amber-800": p.status === "pending",
+                          "bg-slate-100 text-slate-700": p.status === "cancelled",
+                        })}>
+                          {p.status === "paid" ? "✓ Pago" : p.status === "pending" ? "⏳ Pendente" : "Cancelado"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Closure section */}
           <div className="rounded-lg border bg-background p-3 space-y-3">
             <div className="flex items-center justify-between">
