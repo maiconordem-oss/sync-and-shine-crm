@@ -569,6 +569,8 @@ export type Database = {
       }
       tasks: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           assignee_id: string | null
           completed_at: string | null
           created_at: string
@@ -581,6 +583,8 @@ export type Database = {
           position: number
           priority: Database["public"]["Enums"]["task_priority"]
           project_id: string | null
+          return_note: string | null
+          returned_at: string | null
           service_value: number | null
           start_date: string | null
           status: Database["public"]["Enums"]["task_status"]
@@ -590,6 +594,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           assignee_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -602,6 +608,8 @@ export type Database = {
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
+          return_note?: string | null
+          returned_at?: string | null
           service_value?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -611,6 +619,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           assignee_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -623,6 +633,8 @@ export type Database = {
           position?: number
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
+          return_note?: string | null
+          returned_at?: string | null
           service_value?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
