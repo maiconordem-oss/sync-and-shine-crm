@@ -29,6 +29,7 @@ import { runAutomations } from "@/lib/automations";
 import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
 import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attachments";
+import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskLinks } from "@/components/tasks/task-links";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
 import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
@@ -473,137 +474,13 @@ function TasksPage() {
       </div>
 
       {/* Create modal */}
-      {createOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCreateOpen(false)}>
-          <div className="bg-background rounded-xl border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-background z-10 gap-3 flex-wrap">
-              <h2 className="text-lg font-semibold">Nova tarefa</h2>
-              <div className="flex items-center gap-2 ml-auto">
-                <TemplatePicker onApply={applyTemplate} />
-                {isManagerOrAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplatesManager(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border rounded-md px-2 py-1 hover:bg-muted"
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" /> Gerenciar modelos
-                  </button>
-                )}
-                <button onClick={() => setCreateOpen(false)} className="text-muted-foreground hover:text-foreground rounded-full p-1 hover:bg-muted">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            <form onSubmit={createTask} className="p-5 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Título *</label>
-                <Input className="mt-1 text-base" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="O que precisa ser feito?" autoFocus />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Descrição</label>
-                <Textarea className="mt-1" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Contexto, links, detalhes..." rows={3} />
-              </div>
-              {/* Images in body */}
-              <div>
-                <label className="text-sm font-medium">Imagens no corpo</label>
-                <div className="mt-1">
-                  <TaskBodyImages images={newBodyImages} onChange={setNewBodyImages} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Projeto</label>
-                  <Select value={newProject} onValueChange={setNewProject}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem projeto</SelectItem>
-                      {projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <span className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full inline-block" style={{ background: p.color ?? "#3b82f6" }} />
-                            {p.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Responsável</label>
-                  <Select value={newAssignee} onValueChange={(v) => {
-                    setNewAssignee(v);
-                    const p = profiles.find((x) => x.id === v);
-                    setNewType(p?.contract_type === "pj" ? "external" : "internal");
-                  }}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem responsável</SelectItem>
-                      {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name ?? "—"}{p.contract_type === "pj" ? " (PJ)" : ""}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Prioridade</label>
-                  <Select value={newPriority} onValueChange={(v) => setNewPriority(v as TaskPriority)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Status inicial</label>
-                  <Select value={newStatus} onValueChange={(v) => setNewStatus(v as TaskStatus)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>{Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Prazo</label>
-                  <Input type="date" className="mt-1" value={newDue} onChange={(e) => setNewDue(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Tipo</label>
-                  <Select value={newType} onValueChange={(v) => setNewType(v as "internal" | "external")}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Interna (CLT)</SelectItem>
-                      <SelectItem value="external">Externa (PJ)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {newType === "external" && (
-                <div>
-                  <label className="text-sm font-medium">Valor do serviço (R$)</label>
-                  <Input type="number" step="0.01" min="0" className="mt-1" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="Ex: 150.00" />
-                </div>
-              )}
-              {/* Checklist preview from template */}
-              {newChecklistItems.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium">Checklist do modelo ({newChecklistItems.length} itens)</label>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-destructive" onClick={() => setNewChecklistItems([])}>
-                      Remover checklist
-                    </button>
-                  </div>
-                  <div className="rounded-lg border bg-muted/30 p-2 space-y-1 max-h-40 overflow-y-auto">
-                    {newChecklistItems.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <div className="h-3.5 w-3.5 rounded border border-muted-foreground/40 shrink-0" />
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-                <Button type="submit" disabled={createBusy || !newTitle.trim()}>{createBusy ? "Criando..." : "Criar tarefa"}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateTaskDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        projects={projects}
+        profiles={profiles}
+        onCreated={() => void load()}
+      />
 
       {/* Templates manager modal */}
       <TaskTemplatesManager open={showTemplatesManager} onClose={() => setShowTemplatesManager(false)} />
