@@ -102,21 +102,28 @@ function PaymentsPage() {
     return t;
   }, [payments]);
 
-  const create = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    const { error } = await supabase.from("payments").insert([{
+    const payload = {
       description: form.description,
       amount: Number(form.amount),
       beneficiary_user_id: form.beneficiary_user_id === "none" ? null : form.beneficiary_user_id,
       beneficiary_name: form.beneficiary_name || null,
       due_date: form.due_date || null,
-      created_by: user.id,
-    }]);
-    if (error) { toast.error(error.message); return; }
+    };
+    if (editing) {
+      const { error } = await supabase.from("payments").update(payload).eq("id", editing.id);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Pagamento atualizado!");
+    } else {
+      const { error } = await supabase.from("payments").insert([{ ...payload, created_by: user.id }]);
+      if (error) { toast.error(error.message); return; }
+      toast.success("Pagamento criado!");
+    }
     setOpen(false);
-    setForm({ description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" });
-    toast.success("Pagamento criado!");
+    setEditing(null);
+    setForm(emptyForm);
     void load();
   };
 
