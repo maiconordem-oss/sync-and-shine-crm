@@ -160,7 +160,7 @@ function PaymentsPage() {
           <p className="text-sm text-muted-foreground">Controle financeiro vinculado às tarefas.</p>
         </div>
         {isManagerOrAdmin && can("payments.manage") && (
-          <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo pagamento</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Novo pagamento</Button>
         )}
       </div>
 
