@@ -202,7 +202,9 @@ function TasksPage() {
         // Only fire task_completed when done — avoids duplicate payment creation
         void runAutomations({ trigger: "task_completed", task: { ...task, ...update } as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
       } else {
-        void runAutomations({ trigger: "status_changed", task: { ...task, ...update } as unknown as Record<string, unknown>, previousStatus: prevStatus, userId: user.id, userName: profile?.full_name ?? undefined });
+        // status_changed automation disabled — history already records changes
+        // only task_completed is needed for payment automation
+        void 0;
       }
     }
     toast.success(`→ ${STATUS_LABEL[newSt]}`);
@@ -1193,6 +1195,64 @@ function TaskCalendarView({
   );
 }
 
+
+// ─── Image Thumbnails (para o painel de tarefa) ──────────────────────────────
+
+function ImageThumbnails({ taskId }: { taskId: string }) {
+  const [images, setImages] = useState<Array<{ id: string; storage_path: string; file_name: string; signed_url?: string }>>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.from("attachments").select("id,storage_path,file_name,mime_type")
+      .eq("task_id", taskId).like("mime_type", "image/%")
+      .order("created_at").then(async ({ data }) => {
+        if (!data || data.length === 0) return;
+        const withUrls = await Promise.all((data as Array<{ id: string; storage_path: string; file_name: string }>).map(async (img) => {
+          const { data: s } = await supabase.storage.from("attachments").createSignedUrl(img.storage_path, 3600 * 8);
+          return { ...img, signed_url: s?.signedUrl };
+        }));
+        setImages(withUrls.filter((img) => img.signed_url));
+      });
+  }, [taskId]);
+
+  if (images.length === 0) return null;
+
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+        Imagens ({images.length})
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {images.map((img) => (
+          <div key={img.id} className="relative group rounded-xl overflow-hidden bg-muted cursor-pointer aspect-video"
+            onClick={() => setExpanded(expanded === img.id ? null : img.id)}>
+            <img src={img.signed_url} alt={img.file_name} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+              <ExternalLink className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Expanded preview */}
+      {expanded && (
+        <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setExpanded(null)}>
+          <img
+            src={images.find((i) => i.id === expanded)?.signed_url}
+            alt="preview"
+            className="max-w-full max-h-full rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button onClick={() => setExpanded(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Side Panel (tela cheia estilo Bitrix) ────────────────────────────────────
 
 function TaskSidePanel({
@@ -1438,8 +1498,8 @@ function TaskSidePanel({
       {/* ── Body ─────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* LEFT — info da tarefa (somente leitura) */}
-        <div className="w-[380px] shrink-0 border-r flex flex-col overflow-hidden">
+        {/* LEFT — info da tarefa + imagens (50%) */}
+        <div className="w-1/2 border-r flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
             {/* Descrição */}
@@ -1511,6 +1571,9 @@ function TaskSidePanel({
                 </div>
               )}
             </div>
+
+            {/* Imagens anexadas */}
+            <ImageThumbnails taskId={taskId} />
 
             {/* Tags */}
             {(task.tags ?? []).length > 0 && (
@@ -1609,10 +1672,13 @@ function TaskSidePanel({
 
         {/* RIGHT — Abas: chat, checklist, arquivos, tempo */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Tab bar */}
+          {/* Tab bar — só chat e checklist */}
           <div className="flex border-b bg-background shrink-0 px-4">
-            {rightTabs.map(({ id, label, icon: Icon }) => (
-              <button key={id} onClick={() => setRightTab(id)}
+            {([
+              { id: "chat" as const, label: comments.length ? `Bate-papo (${comments.length})` : "Bate-papo", icon: MessageSquare },
+              { id: "checklist" as const, label: checklist.length ? `Checklist ${checklistDone}/${checklist.length}` : "Checklist", icon: ClipboardCheck },
+            ]).map(({ id, label, icon: Icon }) => (
+              <button key={id} onClick={() => setRightTab(id as typeof rightTab)}
                 className={cn("flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                   rightTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
                 )}>
