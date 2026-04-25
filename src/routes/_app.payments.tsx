@@ -55,7 +55,27 @@ function PaymentsPage() {
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" });
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const emptyForm = { description: "", amount: "", beneficiary_user_id: "none", beneficiary_name: "", due_date: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  const openEdit = (p: Payment) => {
+    setEditing(p);
+    setForm({
+      description: p.description,
+      amount: String(p.amount),
+      beneficiary_user_id: p.beneficiary_user_id ?? "none",
+      beneficiary_name: p.beneficiary_name ?? "",
+      due_date: p.due_date ?? "",
+    });
+    setOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
 
   const load = async () => {
     const [p, pr] = await Promise.all([
