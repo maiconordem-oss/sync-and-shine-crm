@@ -236,6 +236,9 @@ function PaymentsPage() {
                               {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)} title="Editar">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           {isAdmin && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
