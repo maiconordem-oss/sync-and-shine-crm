@@ -105,6 +105,22 @@ function PaymentsPage() {
     void load();
   };
 
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("payments").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Pagamento excluído!");
+    void load();
+  };
+
+  const removeAllCancelled = async () => {
+    const ids = payments.filter((p) => p.status === "cancelled").map((p) => p.id);
+    if (ids.length === 0) { toast.info("Nenhum cancelado para excluir."); return; }
+    const { error } = await supabase.from("payments").delete().in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${ids.length} pagamento(s) cancelado(s) excluído(s)!`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
