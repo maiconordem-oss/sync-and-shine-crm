@@ -140,14 +140,36 @@ function PaymentsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-3 flex items-center gap-2">
+        <CardContent className="p-3 flex items-center gap-2 flex-wrap">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
+              <SelectItem value="active">Ativos (sem cancelados)</SelectItem>
               {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
+          {isAdmin && totals.cancelled > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="ml-auto">
+                  <Trash2 className="h-4 w-4 mr-1" /> Limpar cancelados
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir todos os cancelados?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação removerá permanentemente todos os pagamentos com status &quot;Cancelado&quot;.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void removeAllCancelled()}>Excluir</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </CardContent>
       </Card>
 
