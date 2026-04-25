@@ -1435,7 +1435,7 @@ function TaskSidePanel({
   const showStart   = task.status === "new"         && isAssignee;
   const showSend    = task.status === "in_progress" && isAssignee;
   const showWait    = task.status === "in_review"   && isAssignee && !isManagerOrAdmin;
-  const showApprove = task.status === "in_review"   && isManagerOrAdmin;
+  const showApprove = task.status === "in_review"   && user?.id === task.created_by;
   const showDone    = task.status === "done";
   const hasFooter   = showStart || showSend || showWait || showApprove || showDone;
 
