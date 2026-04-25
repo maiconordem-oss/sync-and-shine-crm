@@ -1676,189 +1676,249 @@ function TaskSidePanel({
           {/* Left content */}
           <div className="flex-1 overflow-y-auto">
             {leftTab === "details" && (
-              <div className="p-4 space-y-3">
-                {/* Description */}
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
-                  <Textarea
-                    className="mt-1 text-sm resize-none"
-                    rows={3}
-                    value={task.description ?? ""}
-                    onChange={(e) => setTask({ ...task, description: e.target.value })}
-                    onBlur={(e) => void update({ description: e.target.value || null })}
-                    placeholder="Adicionar descrição..."
-                    disabled={!canEdit}
-                  />
-                </div>
+              <div className="p-4 space-y-4">
 
-                {/* Meta fields — Bitrix style row layout */}
-                <div className="space-y-2.5">
-                  {/* Owner/Creator */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs">Criado por</span>
-                    <div className="flex items-center gap-1.5">
-                      <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(creator?.full_name)}</AvatarFallback></Avatar>
-                      <span className="text-xs font-medium">{creator?.full_name ?? "—"}</span>
+                {/* ── MODO EXECUTOR (responsável não-editor) ── */}
+                {!canEdit ? (
+                  <div className="space-y-4">
+                    {/* Descrição — leitura com links clicáveis */}
+                    {task.description && (
+                      <div className="rounded-xl bg-muted/30 p-3">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">O que fazer</div>
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {task.description.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+                            /^https?:\/\//.test(part)
+                              ? <a key={i} href={part} target="_blank" rel="noreferrer" className="text-primary underline break-all">{part}</a>
+                              : <span key={i}>{part}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info resumida: responsável, prazo, projeto */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {assignee && (
+                        <div className="rounded-lg bg-muted/20 p-2.5">
+                          <div className="text-[10px] text-muted-foreground mb-1">Responsável</div>
+                          <div className="flex items-center gap-1.5">
+                            <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(assignee.full_name)}</AvatarFallback></Avatar>
+                            <span className="text-xs font-medium truncate">{assignee.full_name}</span>
+                          </div>
+                        </div>
+                      )}
+                      {task.due_date && (
+                        <div className={cn("rounded-lg p-2.5", isOverdue(task.due_date) && task.status !== "done" ? "bg-rose-50 border border-rose-200" : "bg-muted/20")}>
+                          <div className="text-[10px] text-muted-foreground mb-1">Prazo</div>
+                          <div className={cn("text-xs font-semibold", isOverdue(task.due_date) && task.status !== "done" ? "text-rose-600" : "")}>
+                            {isOverdue(task.due_date) && task.status !== "done" && <AlertTriangle className="h-3 w-3 inline mr-1" />}
+                            {formatDate(task.due_date)}
+                          </div>
+                        </div>
+                      )}
+                      {proj && (
+                        <div className="rounded-lg bg-muted/20 p-2.5">
+                          <div className="text-[10px] text-muted-foreground mb-1">Projeto</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: proj.color ?? "#3b82f6" }} />
+                            <span className="text-xs font-medium truncate">{proj.name}</span>
+                          </div>
+                        </div>
+                      )}
+                      {task.estimated_hours && (
+                        <div className="rounded-lg bg-muted/20 p-2.5">
+                          <div className="text-[10px] text-muted-foreground mb-1">Tempo estimado</div>
+                          <div className="text-xs font-semibold">{task.estimated_hours}h</div>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Tags */}
+                    {(task.tags ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {(task.tags ?? []).map((tag) => (
+                          <span key={tag} className="text-[11px] bg-primary/10 text-primary rounded-full px-2.5 py-1">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Links clicáveis */}
+                    <TaskLinks taskId={taskId} canEdit={false} />
+
+                    {/* Subtarefas */}
+                    {subtasks.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Subtarefas ({subtasks.length})</div>
+                        {subtasks.map((s) => (
+                          <div key={s.id} className="flex items-center gap-2 py-1.5 border-b last:border-0">
+                            <div className={cn("h-2 w-2 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
+                            <span className={cn("text-sm flex-1", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
+                            <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Arquivos */}
+                    <TaskAttachments taskId={taskId} createdBy={task.created_by} />
                   </div>
 
-                  {/* Assignee */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs">Responsável</span>
-                    <Select
-                      value={task.assignee_id ?? "none"}
-                      onValueChange={(v) => {
-                        const newId = v === "none" ? null : v;
-                        const p = profiles.find((x) => x.id === newId);
-                        const patch: Partial<TaskRow> = { assignee_id: newId };
-                        if (p?.contract_type === "pj") patch.task_type = "external";
-                        else if (p?.contract_type === "clt") patch.task_type = "internal";
-                        void update(patch);
-                      }}
-                      disabled={!isManagerOrAdmin}
-                    >
-                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Avatar className="h-4 w-4 shrink-0"><AvatarFallback className="text-[8px]">{initials(assignee?.full_name)}</AvatarFallback></Avatar>
-                          <span className="truncate">{assignee?.full_name ?? "Nenhum"}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-xs">Sem responsável</SelectItem>
-                        {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Due date */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Prazo</span>
-                    <Input
-                      type="date"
-                      className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[140px] px-2"
-                      value={task.due_date ? task.due_date.slice(0, 10) : ""}
-                      onChange={(e) => void update({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                      disabled={!canEdit}
-                    />
-                  </div>
-
-                  {/* Project */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs flex items-center gap-1"><FolderKanban className="h-3 w-3" /> Projeto</span>
-                    <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })} disabled={!canEdit}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
-                        <div className="flex items-center gap-1.5 truncate">
-                          {proj && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: proj.color ?? "#3b82f6" }} />}
-                          <span className="truncate">{proj?.name ?? "Nenhum"}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-xs">Sem projeto</SelectItem>
-                        {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Estimated hours */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs">Horas est.</span>
-                    <Input
-                      type="number" step="0.25" min="0"
-                      className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[100px] px-2"
-                      value={task.estimated_hours ?? ""}
-                      onChange={(e) => setTask({ ...task, estimated_hours: e.target.value ? Number(e.target.value) : null })}
-                      onBlur={(e) => void update({ estimated_hours: e.target.value ? Number(e.target.value) : null })}
-                      disabled={!canEdit}
-                    />
-                  </div>
-
-                  {/* Type + value */}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground text-xs">Tipo</span>
-                    <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })} disabled={!canEdit}>
-                      <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
-                        <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {task.task_type === "external" && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground text-xs">Valor (R$)</span>
-                      <Input
-                        type="number" step="0.01" min="0"
-                        className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"
-                        value={task.service_value ?? ""}
-                        onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
-                        onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })}
-                        disabled={!canEdit}
+                ) : (
+                  /* ── MODO EDITOR (criador / gestor / admin) ── */
+                  <div className="space-y-3">
+                    {/* Descrição editável */}
+                    <div>
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
+                      <Textarea
+                        className="mt-1 text-sm resize-none"
+                        rows={3}
+                        value={task.description ?? ""}
+                        onChange={(e) => setTask({ ...task, description: e.target.value })}
+                        onBlur={(e) => void update({ description: e.target.value || null })}
+                        placeholder="Descreva o que precisa ser feito, inclua links relevantes..."
                       />
                     </div>
-                  )}
-                </div>
 
-                {/* Tags */}
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Tag className="h-3 w-3" /> Tags</label>
-                  <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
-                    {(task.tags ?? []).map((tag) => (
-                      <span key={tag} className="flex items-center gap-0.5 text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5">
-                        {tag}
-                        {canEdit && <button onClick={() => removeTag(tag)} className="hover:text-rose-500 ml-0.5"><X className="h-2.5 w-2.5" /></button>}
-                      </span>
-                    ))}
+                    {/* Meta fields */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs">Criado por</span>
+                        <div className="flex items-center gap-1.5">
+                          <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{initials(creator?.full_name)}</AvatarFallback></Avatar>
+                          <span className="text-xs font-medium">{creator?.full_name ?? "—"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs">Responsável</span>
+                        <Select value={task.assignee_id ?? "none"} onValueChange={(v) => {
+                          const newId = v === "none" ? null : v;
+                          const p = profiles.find((x) => x.id === newId);
+                          const patch: Partial<TaskRow> = { assignee_id: newId };
+                          if (p?.contract_type === "pj") patch.task_type = "external";
+                          else if (p?.contract_type === "clt") patch.task_type = "internal";
+                          void update(patch);
+                        }} disabled={!isManagerOrAdmin}>
+                          <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <Avatar className="h-4 w-4 shrink-0"><AvatarFallback className="text-[8px]">{initials(assignee?.full_name)}</AvatarFallback></Avatar>
+                              <span className="truncate">{assignee?.full_name ?? "Nenhum"}</span>
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" className="text-xs">Sem responsável</SelectItem>
+                            {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Prazo</span>
+                        <Input type="date" className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[140px] px-2"
+                          value={task.due_date ? task.due_date.slice(0, 10) : ""}
+                          onChange={(e) => void update({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs flex items-center gap-1"><FolderKanban className="h-3 w-3" /> Projeto</span>
+                        <Select value={task.project_id ?? "none"} onValueChange={(v) => void update({ project_id: v === "none" ? null : v })}>
+                          <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[160px] px-2">
+                            <div className="flex items-center gap-1.5 truncate">
+                              {proj && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: proj.color ?? "#3b82f6" }} />}
+                              <span className="truncate">{proj?.name ?? "Nenhum"}</span>
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" className="text-xs">Sem projeto</SelectItem>
+                            {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs">Horas est.</span>
+                        <Input type="number" step="0.25" min="0" className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[100px] px-2"
+                          value={task.estimated_hours ?? ""}
+                          onChange={(e) => setTask({ ...task, estimated_hours: e.target.value ? Number(e.target.value) : null })}
+                          onBlur={(e) => void update({ estimated_hours: e.target.value ? Number(e.target.value) : null })} />
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground text-xs">Tipo</span>
+                        <Select value={task.task_type} onValueChange={(v) => void update({ task_type: v as "internal" | "external" })}>
+                          <SelectTrigger className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
+                            <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {task.task_type === "external" && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground text-xs">Valor (R$)</span>
+                          <Input type="number" step="0.01" min="0" className="h-7 text-xs border-0 bg-muted/30 hover:bg-muted rounded-md w-[120px] px-2"
+                            value={task.service_value ?? ""}
+                            onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
+                            onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tags */}
+                    <div>
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Tag className="h-3 w-3" /> Tags</label>
+                      <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+                        {(task.tags ?? []).map((tag) => (
+                          <span key={tag} className="flex items-center gap-0.5 text-[11px] bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                            {tag}
+                            <button onClick={() => removeTag(tag)} className="hover:text-rose-500 ml-0.5"><X className="h-2.5 w-2.5" /></button>
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        <Input className="h-7 text-xs flex-1" placeholder="Nova tag..." value={newTag}
+                          onChange={(e) => setNewTag(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())} />
+                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={addTag} disabled={!newTag.trim()}><Plus className="h-3 w-3" /></Button>
+                      </div>
+                    </div>
+
+                    {/* Subtarefas */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Subtarefas ({subtasks.length})</label>
+                        <button onClick={() => setAddingSubtask(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5"><Plus className="h-3 w-3" /> Adicionar</button>
+                      </div>
+                      {subtasks.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2 py-1 border-b last:border-0">
+                          <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
+                          <span className={cn("text-xs flex-1 truncate", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
+                          <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
+                        </div>
+                      ))}
+                      {addingSubtask && (
+                        <div className="flex gap-1 mt-1">
+                          <Input className="h-7 text-xs flex-1" placeholder="Título da subtarefa..." value={subtaskTitle}
+                            onChange={(e) => setSubtaskTitle(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSubtask(); } if (e.key === "Escape") { setAddingSubtask(false); setSubtaskTitle(""); } }}
+                            autoFocus />
+                          <Button size="sm" className="h-7 px-2" onClick={addSubtask} disabled={!subtaskTitle.trim()}>OK</Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setAddingSubtask(false); setSubtaskTitle(""); }}><X className="h-3 w-3" /></Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Links */}
+                    <div>
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                        <ExternalLink className="h-3 w-3" /> Links
+                      </label>
+                      <TaskLinks taskId={taskId} canEdit={true} />
+                    </div>
+
+                    {/* Arquivos */}
+                    <div>
+                      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                        <Paperclip className="h-3 w-3" /> Arquivos
+                      </label>
+                      <TaskAttachments taskId={taskId} createdBy={task.created_by} />
+                    </div>
                   </div>
-                  {canEdit && (
-                    <div className="flex gap-1">
-                      <Input className="h-7 text-xs flex-1" placeholder="Nova tag..." value={newTag}
-                        onChange={(e) => setNewTag(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())} />
-                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={addTag} disabled={!newTag.trim()}><Plus className="h-3 w-3" /></Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Subtasks */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Subtarefas ({subtasks.length})</label>
-                    <button onClick={() => setAddingSubtask(true)} className="text-xs text-primary hover:underline flex items-center gap-0.5"><Plus className="h-3 w-3" /> Adicionar</button>
-                  </div>
-                  {subtasks.map((s) => (
-                    <div key={s.id} className="flex items-center gap-2 py-1 border-b last:border-0">
-                      <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
-                      <span className={cn("text-xs flex-1 truncate", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
-                      <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
-                    </div>
-                  ))}
-                  {addingSubtask && (
-                    <div className="flex gap-1 mt-1">
-                      <Input className="h-7 text-xs flex-1" placeholder="Título da subtarefa..." value={subtaskTitle}
-                        onChange={(e) => setSubtaskTitle(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addSubtask(); } if (e.key === "Escape") { setAddingSubtask(false); setSubtaskTitle(""); } }}
-                        autoFocus />
-                      <Button size="sm" className="h-7 px-2" onClick={addSubtask} disabled={!subtaskTitle.trim()}>OK</Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setAddingSubtask(false); setSubtaskTitle(""); }}><X className="h-3 w-3" /></Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Links */}
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
-                    <ExternalLink className="h-3 w-3" /> Links
-                  </label>
-                  <TaskLinks taskId={taskId} canEdit={canEdit} />
-                </div>
-
-                {/* Attachments */}
-                <div>
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 mb-1.5">
-                    <Paperclip className="h-3 w-3" /> Arquivos
-                  </label>
-                  <TaskAttachments taskId={taskId} createdBy={task.created_by} />
-                </div>
+                )}
 
                 {/* Footer */}
                 <div className="pt-2 border-t space-y-1">
