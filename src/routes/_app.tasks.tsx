@@ -1515,25 +1515,7 @@ function TaskSidePanel({
               <Play className="h-3 w-3" /> Timer
             </button>
           )}
-          {/* ── Botões de fluxo ── */}
-          {/* Responsável: Nova → iniciar */}
-          {task.status === "new" && user?.id === task.assignee_id && (
-            <button
-              onClick={() => void update({ status: "in_progress" as TaskStatus })}
-              className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 rounded-md px-2 py-1 hover:bg-blue-200 font-medium"
-            >
-              <Play className="h-3 w-3" /> Iniciar tarefa
-            </button>
-          )}
-          {/* Responsável: Em andamento → enviar para revisão */}
-          {task.status === "in_progress" && user?.id === task.assignee_id && (
-            <button
-              onClick={() => void update({ status: "in_review" as TaskStatus })}
-              className="flex items-center gap-1 text-xs bg-purple-100 text-purple-700 rounded-md px-2 py-1 hover:bg-purple-200 font-medium"
-            >
-              <CheckCircle2 className="h-3 w-3" /> Enviar para revisão
-            </button>
-          )}
+          {/* flow buttons moved to content area */}
           {/* Criador/Gestor: Em revisão → aprovar ou devolver */}
           {task.status === "in_review" && isManagerOrAdmin && (
             <div className="flex gap-1">
@@ -1681,6 +1663,34 @@ function TaskSidePanel({
                 {/* ── MODO EXECUTOR (responsável não-editor) ── */}
                 {!canEdit ? (
                   <div className="space-y-4">
+                    {/* ── Botão de ação principal ── */}
+                    {task.status === "new" && user?.id === task.assignee_id && (
+                      <button
+                        onClick={() => void update({ status: "in_progress" as TaskStatus })}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-semibold text-sm shadow-sm transition-colors"
+                      >
+                        <Play className="h-4 w-4" /> Iniciar esta tarefa
+                      </button>
+                    )}
+                    {task.status === "in_progress" && user?.id === task.assignee_id && (
+                      <button
+                        onClick={() => void update({ status: "in_review" as TaskStatus })}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-purple-600 text-white hover:bg-purple-700 font-semibold text-sm shadow-sm transition-colors"
+                      >
+                        <CheckCircle2 className="h-4 w-4" /> Concluí — enviar para revisão
+                      </button>
+                    )}
+                    {task.status === "in_review" && user?.id === task.assignee_id && (
+                      <div className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 font-medium text-sm">
+                        <Clock className="h-4 w-4" /> Aguardando aprovação do gestor
+                      </div>
+                    )}
+                    {task.status === "done" && (
+                      <div className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold text-sm">
+                        <CheckCircle2 className="h-4 w-4" /> Tarefa concluída ✓
+                      </div>
+                    )}
+
                     {/* Descrição — leitura com links clicáveis */}
                     {task.description && (
                       <div className="rounded-xl bg-muted/30 p-3">
@@ -1765,6 +1775,37 @@ function TaskSidePanel({
                 ) : (
                   /* ── MODO EDITOR (criador / gestor / admin) ── */
                   <div className="space-y-3">
+                    {/* Aprovar/devolver quando em revisão */}
+                    {task.status === "in_review" && isManagerOrAdmin && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
+                            if (task.task_type === "external" && task.service_value && task.assignee_id) {
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const { data: existing } = await supabase.from("payments").select("id").eq("task_id", task.id).eq("status", "pending").maybeSingle();
+                              if (!existing) {
+                                await supabase.from("payments").insert([{ description: `Pagamento ref. tarefa: ${task.title}`, amount: task.service_value, beneficiary_user_id: task.assignee_id, status: "pending", due_date: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10), task_id: task.id, project_id: task.project_id, created_by: user?.id ?? null }]);
+                                toast.success("✅ Aprovada! Pagamento PJ registrado.");
+                              } else { toast.success("✅ Tarefa aprovada!"); }
+                            } else { toast.success("✅ Tarefa aprovada e concluída!"); }
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-sm"
+                        >
+                          <CheckCircle2 className="h-4 w-4" /> Aprovar e concluir
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const note = window.prompt("Motivo da devolução (opcional):");
+                            await update({ status: "in_progress" as TaskStatus, returned_at: new Date().toISOString(), return_note: note ?? null });
+                            toast.success("Tarefa devolvida para edição.");
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-100 text-rose-700 hover:bg-rose-200 font-semibold text-sm"
+                        >
+                          <XCircle className="h-4 w-4" /> Devolver para edição
+                        </button>
+                      </div>
+                    )}
                     {/* Descrição editável */}
                     <div>
                       <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
