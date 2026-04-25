@@ -26,6 +26,7 @@ interface AuthContextValue {
   isPJ: boolean;          // contract_type === 'pj'
   canCreateTasks: boolean; // admin, manager, or CLT member
   soundEnabled: boolean;
+  can: (permission: string) => boolean; // check role_permissions table
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -119,6 +120,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isPJ = profile?.contract_type === "pj";
   const canCreateTasks = roles.includes("admin") || roles.includes("manager") || (!isPJ && roles.includes("member"));
 
+  // Load role_permissions from DB
+  const [rolePerms, setRolePerms] = React.useState<Record<string, boolean>>({});
+  React.useEffect(() => {
+    if (!roles.length) return;
+    const roleKey = roles.includes("admin") ? "admin"
+      : roles.includes("manager") ? "manager"
+      : isPJ ? "pj" : "member";
+    // Admin always has all permissions
+    if (roleKey === "admin") { setRolePerms({}); return; }
+    void (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data } = await (supabase.from("role_permissions" as never) as any)
+          .select("permission,enabled")
+          .eq("role", roleKey);
+        if (data) {
+          const map: Record<string, boolean> = {};
+          for (const row of data as { permission: string; enabled: boolean }[]) {
+            map[row.permission] = row.enabled;
+          }
+          setRolePerms(map);
+        }
+      } catch { /* table not created yet — ignore */ }
+    })();
+  }, [roles.join(","), isPJ]);
+
+  const can = React.useCallback((permission: string): boolean => {
+    if (roles.includes("admin")) return true; // admin can always
+    return rolePerms[permission] ?? true; // default true if table not loaded yet
+  }, [roles, rolePerms]);
+
   const value: AuthContextValue = {
     session,
     user,
@@ -132,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     canCreateTasks,
     soundEnabled,
     setSoundEnabled,
+    can,
     signIn,
     signUp,
     signOut,

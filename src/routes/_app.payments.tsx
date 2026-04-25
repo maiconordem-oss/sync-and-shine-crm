@@ -50,7 +50,7 @@ const STATUS_BADGE: Record<PayStatus, string> = {
 };
 
 function PaymentsPage() {
-  const { user, isManagerOrAdmin, isAdmin } = useAuth();
+  const { user, isManagerOrAdmin, can, isAdmin } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -132,7 +132,7 @@ function PaymentsPage() {
           <h1 className="text-2xl font-bold">Pagamentos</h1>
           <p className="text-sm text-muted-foreground">Controle financeiro vinculado às tarefas.</p>
         </div>
-        {isManagerOrAdmin && (
+        {isManagerOrAdmin && can("payments.manage") && (
           <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Novo pagamento</Button>
         )}
       </div>

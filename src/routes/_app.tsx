@@ -57,22 +57,23 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   managerOnly?: boolean;
   adminOnly?: boolean;
+  permKey?: string; // role_permissions key
 }
 
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/tasks", label: "Tarefas", icon: KanbanSquare },
   { to: "/projects", label: "Projetos", icon: FolderKanban },
-  { to: "/payments", label: "Pagamentos", icon: Wallet },
-  { to: "/reports", label: "Relatórios", icon: BarChart3 },
-  { to: "/chat", label: "Chat", icon: MessageSquare },
-  { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true },
-  { to: "/members", label: "Membros", icon: Users, adminOnly: true },
+  { to: "/payments", label: "Pagamentos", icon: Wallet, permKey: "payments.manage" },
+  { to: "/reports", label: "Relatórios", icon: BarChart3, permKey: "reports.view_all" },
+  { to: "/chat", label: "Chat", icon: MessageSquare, permKey: "chat.access" },
+  { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true, permKey: "automations.edit" },
+  { to: "/members", label: "Membros", icon: Users, adminOnly: true, permKey: "members.manage" },
   { to: "/permissions", label: "Permissões", icon: ShieldCheck, adminOnly: true },
 ];
 
 function AppLayout() {
-  const { isAuthenticated, loading, profile, user, signOut, isAdmin, isManagerOrAdmin, roles } = useAuth();
+  const { isAuthenticated, loading, profile, user, signOut, isAdmin, isManagerOrAdmin, roles, can } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [unread, setUnread] = useState(0);
@@ -147,7 +148,8 @@ function AppLayout() {
 
   const visibleNav = NAV.filter((n) => {
     if (n.adminOnly) return isAdmin;
-    if (n.managerOnly) return isManagerOrAdmin;
+    if (n.managerOnly && !isManagerOrAdmin) return false;
+    if (n.permKey && !can(n.permKey)) return false;
     return true;
   });
 
