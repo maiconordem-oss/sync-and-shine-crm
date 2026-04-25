@@ -119,7 +119,7 @@ interface SubTask {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function TasksPage() {
-  const { user, profile, loading, isAuthenticated, isManagerOrAdmin, canCreateTasks } = useAuth();
+  const { user, profile, loading, isAuthenticated, isAdmin, isManagerOrAdmin, canCreateTasks } = useAuth();
   const { play: playSound } = useSound();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list" | "calendar">("kanban");
@@ -418,6 +418,7 @@ function TasksPage() {
                     onOpenPanel={setPanelTaskId}
                     isManagerOrAdmin={isManagerOrAdmin}
                     onQuickStatus={quickStatusChange}
+                    isAdmin={isAdmin}
                     onDelete={deleteTask}
                     userId={user?.id ?? null}
                     onInlineCreate={(task) => {
@@ -502,7 +503,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function KanbanColumn({
   status, tasks, profileById, projectById, activePanelId, onOpenPanel,
-  isManagerOrAdmin, onQuickStatus, onDelete, userId, onInlineCreate,
+  isManagerOrAdmin, isAdmin, onQuickStatus, onDelete, userId, onInlineCreate,
 }: {
   status: TaskStatus;
   tasks: TaskRow[];
@@ -511,6 +512,7 @@ function KanbanColumn({
   activePanelId: string | null;
   onOpenPanel: (id: string) => void;
   isManagerOrAdmin: boolean;
+  isAdmin: boolean;
   onQuickStatus: (id: string, st: TaskStatus) => void;
   onDelete: (id: string) => void;
   userId: string | null;
@@ -566,6 +568,8 @@ function KanbanColumn({
             onOpenPanel={onOpenPanel}
             isActive={activePanelId === t.id}
             isManagerOrAdmin={isManagerOrAdmin}
+            isAdmin={isAdmin}
+            userId={userId}
             onQuickStatus={onQuickStatus}
             onDelete={onDelete}
           />
@@ -598,7 +602,7 @@ function KanbanColumn({
 
 function KanbanCard({
   task, profileById, projectById, onOpenPanel, isActive,
-  isManagerOrAdmin, onQuickStatus, onDelete,
+  isManagerOrAdmin, isAdmin, userId, onQuickStatus, onDelete,
 }: {
   task: TaskRow;
   profileById: (id: string | null) => ProfileLite | undefined;
@@ -606,9 +610,12 @@ function KanbanCard({
   onOpenPanel: (id: string) => void;
   isActive: boolean;
   isManagerOrAdmin: boolean;
+  isAdmin: boolean;
+  userId: string | null;
   onQuickStatus: (id: string, st: TaskStatus) => void;
   onDelete: (id: string) => void;
 }) {
+  const canDeleteCard = isAdmin || userId === task.created_by;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const proj = projectById(task.project_id);
   const assignee = profileById(task.assignee_id);
@@ -674,7 +681,7 @@ function KanbanCard({
                     <ChevronRight className="h-3.5 w-3.5 mr-2" /> {STATUS_LABEL[s]}
                   </DropdownMenuItem>
                 ))}
-                {isManagerOrAdmin && (
+                {canDeleteCard && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(task.id)}>
