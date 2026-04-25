@@ -3,7 +3,18 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +50,7 @@ const STATUS_BADGE: Record<PayStatus, string> = {
 };
 
 function PaymentsPage() {
-  const { user, isManagerOrAdmin } = useAuth();
+  const { user, isManagerOrAdmin, isAdmin } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -57,7 +68,11 @@ function PaymentsPage() {
   useEffect(() => { void load(); }, []);
 
   const filtered = useMemo(
-    () => payments.filter((p) => filterStatus === "all" || p.status === filterStatus),
+    () => payments.filter((p) => {
+      if (filterStatus === "all") return true;
+      if (filterStatus === "active") return p.status !== "cancelled";
+      return p.status === filterStatus;
+    }),
     [payments, filterStatus],
   );
 
@@ -94,6 +109,22 @@ function PaymentsPage() {
     void load();
   };
 
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("payments").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Pagamento excluído!");
+    void load();
+  };
+
+  const removeAllCancelled = async () => {
+    const ids = payments.filter((p) => p.status === "cancelled").map((p) => p.id);
+    if (ids.length === 0) { toast.info("Nenhum cancelado para excluir."); return; }
+    const { error } = await supabase.from("payments").delete().in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${ids.length} pagamento(s) cancelado(s) excluído(s)!`);
+    void load();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -113,14 +144,36 @@ function PaymentsPage() {
       </div>
 
       <Card>
-        <CardContent className="p-3 flex items-center gap-2">
+        <CardContent className="p-3 flex items-center gap-2 flex-wrap">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os status</SelectItem>
+              <SelectItem value="active">Ativos (sem cancelados)</SelectItem>
               {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
+          {isAdmin && totals.cancelled > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="ml-auto">
+                  <Trash2 className="h-4 w-4 mr-1" /> Limpar cancelados
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir todos os cancelados?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação removerá permanentemente todos os pagamentos com status &quot;Cancelado&quot;.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void removeAllCancelled()}>Excluir</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </CardContent>
       </Card>
 
@@ -149,12 +202,35 @@ function PaymentsPage() {
                     <td className="p-3"><Badge className={STATUS_BADGE[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge></td>
                     {isManagerOrAdmin && (
                       <td className="p-3">
-                        <Select value={p.status} onValueChange={(v) => void setStatus(p.id, v as PayStatus)}>
-                          <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-2">
+                          <Select value={p.status} onValueChange={(v) => void setStatus(p.id, v as PayStatus)}>
+                            <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(PAYMENT_STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {isAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir pagamento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    &quot;{p.description}&quot; será removido permanentemente.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => void remove(p.id)}>Excluir</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
