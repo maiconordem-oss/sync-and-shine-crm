@@ -286,18 +286,20 @@ function AdminView() {
   useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo<PJRow[]>(() => pjs.map((pj) => {
-    const pjPayments = payments.filter((p) => p.beneficiary_user_id === pj.id);
+    const pjPayments = payments.filter((p) => p.beneficiary_user_id === pj.id && p.status !== "cancelled");
     const pjTasks = tasks.filter((t) => t.assignee_id === pj.id);
-    const paidFromPayments = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
     const completedTasks = pjTasks.length;
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
     const sumValues = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
     const avgPerTask = tasksWithValue.length > 0 ? sumValues / tasksWithValue.length : 0;
-    // Total to pay = sum of task service_values
-    const totalToPay = sumValues;
-    // Paid = whatever was already marked paid in payments table
-    const totalPaid = paidFromPayments;
-    // Pending = total to pay minus what's already paid
+    // Pagamentos manuais (sem task_id vinculado) entram direto no total
+    const manualPayments = pjPayments.filter((p) => !p.task_id);
+    const manualTotal = manualPayments.reduce((s, p) => s + Number(p.amount), 0);
+    // Total to pay = soma dos valores das tarefas externas + pagamentos manuais
+    const totalToPay = sumValues + manualTotal;
+    // Pago = pagamentos com status "paid" (manuais ou vinculados a tarefas)
+    const totalPaid = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+    // Pendente = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
     const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
     return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure };
