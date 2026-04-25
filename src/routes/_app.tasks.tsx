@@ -32,7 +32,7 @@ import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attac
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
 import { TaskLinks } from "@/components/tasks/task-links";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
-import { TemplatePicker, TaskTemplatesManager, type TaskTemplate } from "@/components/tasks/task-templates";
+import { TemplatePicker, type TaskTemplate } from "@/components/tasks/task-templates";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -137,19 +137,6 @@ function TasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   // Create form
-  const [newTitle, setNewTitle] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newProject, setNewProject] = useState("none");
-  const [newAssignee, setNewAssignee] = useState("none");
-  const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("new");
-  const [newDue, setNewDue] = useState("");
-  const [newType, setNewType] = useState<"internal" | "external">("internal");
-  const [newValue, setNewValue] = useState("");
-  const [createBusy, setCreateBusy] = useState(false);
-  const [newBodyImages, setNewBodyImages] = useState<{ url: string; path: string; name: string }[]>([]);
-  const [newChecklistItems, setNewChecklistItems] = useState<string[]>([]);
-  const [showTemplatesManager, setShowTemplatesManager] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -228,79 +215,6 @@ function TasksPage() {
     await quickStatusChange(taskId, newSt);
   };
 
-  const createTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    const title = newTitle.trim();
-    if (!title) { toast.error("Informe um título."); return; }
-    setCreateBusy(true);
-    const assigneeProfile = profiles.find((p) => p.id === newAssignee);
-    const taskType = assigneeProfile?.contract_type === "pj" ? "external" : newType;
-    const payload = {
-      title,
-      description: newDesc || null,
-      project_id: newProject === "none" ? null : newProject,
-      assignee_id: newAssignee === "none" ? null : newAssignee,
-      priority: newPriority,
-      status: newStatus,
-      due_date: newDue ? new Date(newDue).toISOString() : null,
-      created_by: user.id,
-      task_type: taskType,
-      service_value: taskType === "external" && newValue ? Number(newValue) : null,
-      position: tasks.length,
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await supabase.from("tasks").insert([payload] as any).select().single();
-    setCreateBusy(false);
-    if (error) { toast.error(error.message); return; }
-    const createdTask = data as TaskRow;
-
-    // Create checklist items from template
-    if (newChecklistItems.length > 0) {
-      await supabase.from("checklists").insert(
-        newChecklistItems.map((text, i) => ({ task_id: createdTask.id, text, position: i, done: false }))
-      );
-    }
-
-    // Register body images as attachments in DB
-    if (newBodyImages.length > 0 && user) {
-      await supabase.from("attachments").insert(
-        newBodyImages.map((img) => ({
-          task_id: createdTask.id,
-          uploaded_by: user.id,
-          file_name: img.name,
-          storage_path: img.path,
-          mime_type: "image/*",
-          size_bytes: null,
-        }))
-      );
-    }
-
-    toast.success("Tarefa criada!");
-    setTasks((prev) => [...prev, createdTask]);
-    setNewTitle(""); setNewDesc(""); setNewDue(""); setNewValue("");
-    setNewProject("none"); setNewAssignee("none");
-    setNewPriority("medium"); setNewStatus("new"); setNewType("internal");
-    setNewBodyImages([]); setNewChecklistItems([]);
-    setCreateOpen(false);
-    if (data) {
-      void runAutomations({ trigger: "task_created", task: data as unknown as Record<string, unknown>, userId: user.id, userName: profile?.full_name ?? undefined });
-      setPanelTaskId(createdTask.id);
-    }
-  };
-
-  // Apply template to create form
-  const applyTemplate = (t: TaskTemplate) => {
-    // Título: preenche só se o campo estiver vazio
-    if (t.default_title && !newTitle) setNewTitle(t.default_title);
-    // Descrição: preenche só se vazia
-    if (t.description && !newDesc) setNewDesc(t.description);
-    setNewPriority(t.default_priority);
-    setNewType(t.default_task_type);
-    if (t.default_service_value) setNewValue(String(t.default_service_value));
-    if (t.checklist_items && t.checklist_items.length > 0) setNewChecklistItems(t.checklist_items);
-    toast.success(`Modelo "${t.name}" aplicado!`);
-  };
 
   if (pageLoading || loading) {
     return (
@@ -336,11 +250,6 @@ function TasksPage() {
               <CalendarDays className="h-4 w-4 mr-1" /> Calendário
             </Button>
           </div>
-          {isManagerOrAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setShowTemplatesManager(true)}>
-              <ClipboardList className="h-4 w-4 mr-1" /> Modelos
-            </Button>
-          )}
           {canCreateTasks && (
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> Nova tarefa
@@ -483,8 +392,6 @@ function TasksPage() {
         onCreated={() => void load()}
       />
 
-      {/* Templates manager modal */}
-      <TaskTemplatesManager open={showTemplatesManager} onClose={() => setShowTemplatesManager(false)} />
     </div>
   );
 }
