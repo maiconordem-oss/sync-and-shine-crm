@@ -403,7 +403,7 @@ function TasksPage() {
         <div className="flex-1 min-w-0 overflow-auto">
           {view === "kanban" ? (
             <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-              <div className="flex gap-3 pb-4 overflow-x-auto h-full">
+              <div className="flex gap-2 pb-4 h-full w-full">
                 {STATUS_ORDER.map((s) => (
                   <KanbanColumn
                     key={s}
@@ -666,8 +666,8 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-xl border bg-muted/20 flex flex-col min-w-[272px] w-[272px]",
-        "max-h-[calc(100vh-230px)]",
+        "rounded-xl border bg-muted/20 flex flex-col min-w-[280px] flex-1",
+        "max-h-[calc(100vh-200px)]",
         isOver && "ring-2 ring-primary bg-primary/5",
       )}
     >
@@ -765,7 +765,7 @@ function KanbanCard({
 
       {/* Thumbnail */}
       {thumbnail && (
-        <div className="w-full overflow-hidden bg-muted" style={{ height: "88px" }}>
+        <div className="w-full overflow-hidden bg-muted rounded-t-lg" style={{ height: "160px" }}>
           <img
             src={thumbnail}
             alt="preview"
