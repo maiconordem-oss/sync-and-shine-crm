@@ -50,7 +50,7 @@ const STATUS_BADGE: Record<PayStatus, string> = {
 };
 
 function PaymentsPage() {
-  const { user, isManagerOrAdmin } = useAuth();
+  const { user, isManagerOrAdmin, isAdmin } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
