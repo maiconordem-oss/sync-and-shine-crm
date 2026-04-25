@@ -68,7 +68,11 @@ function PaymentsPage() {
   useEffect(() => { void load(); }, []);
 
   const filtered = useMemo(
-    () => payments.filter((p) => filterStatus === "all" || p.status === filterStatus),
+    () => payments.filter((p) => {
+      if (filterStatus === "all") return true;
+      if (filterStatus === "active") return p.status !== "cancelled";
+      return p.status === filterStatus;
+    }),
     [payments, filterStatus],
   );
 
