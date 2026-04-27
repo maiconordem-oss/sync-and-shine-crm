@@ -682,13 +682,15 @@ function PJRow({
                   const pj = row.pj;
                   const tasks = row.tasks;
                   const payments = row.payments;
+                  const manuals = payments.filter(p => !p.task_id && p.status !== "cancelled");
                   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório PJ — ${pj.full_name ?? pj.email}</title>
                     <style>
                       body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:800px;margin:0 auto}
                       h1{font-size:20px;margin:0 0 4px}
                       .sub{font-size:13px;color:#666;margin:0 0 24px}
                       .meta{float:right;font-size:11px;color:#888;text-align:right;line-height:1.8}
-                      table{width:100%;border-collapse:collapse;margin:16px 0}
+                      h2{font-size:14px;margin:24px 0 8px;padding-bottom:4px;border-bottom:2px solid #eee}
+                      table{width:100%;border-collapse:collapse;margin:8px 0 16px}
                       th{background:#f0f0f0;text-align:left;padding:8px 12px;font-size:12px;border-bottom:2px solid #ccc}
                       td{padding:8px 12px;font-size:12px;border-bottom:1px solid #eee;vertical-align:top}
                       .right{text-align:right}.center{text-align:center}
@@ -706,9 +708,11 @@ function PJRow({
                     </div>
                     <h1>${pj.full_name ?? "Prestador PJ"}</h1>
                     <p class="sub">${pj.email ?? ""}</p>
+
+                    <h2>Tarefas concluídas</h2>
                     <table>
                       <thead><tr><th>Tarefa</th><th>Conclusão</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-                      <tbody>${tasks.map(t => {
+                      <tbody>${tasks.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map(t => {
                         const pay = payments.find(p => p.task_id === t.id && p.status !== "cancelled");
                         const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".",",") : "—";
                         const date = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
@@ -716,8 +720,23 @@ function PJRow({
                         return `<tr><td>${t.title}</td><td>${date}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
                       }).join("")}</tbody>
                     </table>
+
+                    ${manuals.length > 0 ? `
+                    <h2>Pagamentos avulsos</h2>
+                    <table>
+                      <thead><tr><th>Descrição</th><th>Vencimento</th><th>Pagamento</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+                      <tbody>${manuals.map(p => {
+                        const badge = p.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
+                        const due = p.due_date ? new Date(p.due_date).toLocaleDateString("pt-BR") : "—";
+                        const paid = p.paid_date ? new Date(p.paid_date).toLocaleDateString("pt-BR") : "—";
+                        const val = "R$ " + Number(p.amount).toFixed(2).replace(".",",");
+                        return `<tr><td>${p.description}</td><td>${due}</td><td>${paid}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+                      }).join("")}</tbody>
+                    </table>` : ""}
+
                     <table class="summary">
                       <tr><td style="padding:8px 12px">Tarefas concluídas</td><td class="right" style="padding:8px 12px">${row.completedTasks}</td></tr>
+                      ${manuals.length > 0 ? `<tr><td style="padding:8px 12px">Pagamentos avulsos</td><td class="right" style="padding:8px 12px">${manuals.length}</td></tr>` : ""}
                       <tr><td style="padding:8px 12px" class="pending">A receber</td><td class="right pending" style="padding:8px 12px">R$ ${row.totalPending.toFixed(2).replace(".",",")}</td></tr>
                       <tr><td style="padding:8px 12px" class="paid">Pago</td><td class="right paid" style="padding:8px 12px">R$ ${row.totalPaid.toFixed(2).replace(".",",")}</td></tr>
                       <tr><td style="padding:8px 12px">Total</td><td class="right" style="padding:8px 12px">R$ ${row.totalToPay.toFixed(2).replace(".",",")}</td></tr>
