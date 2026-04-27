@@ -1428,7 +1428,7 @@ function TaskSidePanel({
                 <div className="flex gap-2">
                   <button
                     onClick={async () => {
-                      await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
+                      await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString(), completed_at: new Date().toISOString() });
                       if (task.task_type === "external" && task.assignee_id) {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const { data: ex } = await (supabase.from("payments") as any).select("id").eq("task_id", task.id).eq("status", "pending").maybeSingle();
