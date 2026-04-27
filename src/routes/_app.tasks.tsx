@@ -348,6 +348,7 @@ function TasksPage() {
               onQuickStatus={quickStatusChange}
               onDelete={deleteTask}
               isManagerOrAdmin={isManagerOrAdmin}
+              userId={user?.id ?? null}
               navigate={navigate}
             />
           ) : (
