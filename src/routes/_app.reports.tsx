@@ -271,10 +271,10 @@ function AdminView() {
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
       ),
-      supabase.from("tasks").select("id,title,assignee_id,service_value,task_type,status,completed_at,approved_at")
-        .eq("task_type", "external").eq("status", "done")
-        .or(`completed_at.gte.${startISO},approved_at.gte.${startISO}`)
-        .or(`completed_at.lt.${endISO},approved_at.lt.${endISO}`),
+      supabase.rpc("get_pj_tasks_for_report", {
+        start_iso: startISO,
+        end_iso: endISO,
+      }),
       supabase.from("monthly_closures").select("*").eq("reference_month", month),
     ]);
     setPjs((pjRes.data ?? []) as PJProfile[]);
