@@ -524,6 +524,7 @@ function KanbanCard({
   onDelete: (id: string) => void;
 }) {
   const canDeleteCard = isAdmin || userId === task.created_by;
+  const cardNavigate = useNavigate();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const proj = projectById(task.project_id);
   const assignee = profileById(task.assignee_id);
@@ -583,7 +584,7 @@ function KanbanCard({
                   <Edit3 className="h-3.5 w-3.5 mr-2" /> Abrir painel
                 </DropdownMenuItem>
                 {(isManagerOrAdmin || userId === task.created_by) && (
-                  <DropdownMenuItem onClick={() => window.location.assign(`/tasks/${task.id}`)}>
+                  <DropdownMenuItem onClick={() => cardNavigate({ to: "/tasks/$taskId", params: { taskId: task.id } })}>
                     <Edit3 className="h-3.5 w-3.5 mr-2" /> Editar tarefa
                   </DropdownMenuItem>
                 )}
