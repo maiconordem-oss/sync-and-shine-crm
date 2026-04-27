@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
-import { Shield, Info, AlertTriangle, CheckCircle2, X, History, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle2, X, History, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,6 @@ interface RolePerm {
   permission: string;
   enabled: boolean;
   updated_at?: string;
-  updated_by?: string | null;
 }
 
 const ROLES = [
@@ -98,7 +97,7 @@ const PRESETS: Record<string, { label: string; desc: string; perms: Record<strin
 const DEFAULT_ENABLED: Record<string, string[]> = PRESETS.standard.perms;
 
 function PermissionsPage() {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const [perms, setPerms] = useState<RolePerm[]>([]);
   const [loading, setLoading] = useState(true);
   const [tableReady, setTableReady] = useState(false);
@@ -130,9 +129,9 @@ function PermissionsPage() {
         setTableReady(true);
         setPerms((data ?? []) as unknown as RolePerm[]);
         // History = items with updated_at
-        setHistory(((data ?? []) as unknown as RolePerm[])
-          .filter((p: RolePerm) => p.updated_at)
-          .sort((a: RolePerm, b: RolePerm) => new Date(b.updated_at!).getTime() - new Date(a.updated_at!).getTime())
+        const withDates = ((data ?? []) as unknown as RolePerm[]).filter((p: RolePerm) => !!p.updated_at);
+        setHistory(withDates
+          .sort((a: RolePerm, b: RolePerm) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())
           .slice(0, 20));
       }
     } catch { setTableReady(false); }
@@ -164,7 +163,7 @@ function PermissionsPage() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase.from("role_permissions" as never) as any)
-        .upsert([{ role, permission, enabled: !currentEnabled, updated_at: new Date().toISOString(), updated_by: user?.id }], { onConflict: "role,permission" });
+        .upsert([{ role, permission, enabled: !currentEnabled, updated_at: new Date().toISOString() }], { onConflict: "role,permission" });
       if (error) { toast.error(error.message); setSaving(null); return; }
       setPerms((prev) => prev.map((p) =>
         p.role === role && p.permission === permission ? { ...p, enabled: !currentEnabled } : p
@@ -179,14 +178,13 @@ function PermissionsPage() {
     const preset = PRESETS[presetKey];
     if (!confirm(`Aplicar preset "${preset.label}"? Isso vai sobrescrever as permissões atuais de Gestor, CLT e PJ.`)) return;
 
-    const upserts: { role: string; permission: string; enabled: boolean; updated_at: string; updated_by: string | undefined }[] = [];
+    const upserts: { role: string; permission: string; enabled: boolean; updated_at: string }[] = [];
     for (const role of ["manager", "member", "pj"]) {
       for (const p of PERMISSIONS) {
         upserts.push({
           role, permission: p.key,
           enabled: (preset.perms[role] ?? []).includes(p.key),
           updated_at: new Date().toISOString(),
-          updated_by: user?.id,
         });
       }
     }
