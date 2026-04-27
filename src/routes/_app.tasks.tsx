@@ -524,6 +524,7 @@ function KanbanCard({
   onDelete: (id: string) => void;
 }) {
   const canDeleteCard = isAdmin || userId === task.created_by;
+  const cardNavigate = useNavigate();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const proj = projectById(task.project_id);
   const assignee = profileById(task.assignee_id);
