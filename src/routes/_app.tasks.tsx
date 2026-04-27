@@ -649,7 +649,7 @@ function KanbanCard({
 
 function TaskListView({
   tasks, profileById, projectById, activePanelId, onOpenPanel,
-  onQuickStatus, onDelete, isManagerOrAdmin, navigate,
+  onQuickStatus, onDelete, isManagerOrAdmin, userId, navigate,
 }: {
   tasks: TaskRow[];
   profileById: (id: string | null) => ProfileLite | undefined;
@@ -659,6 +659,7 @@ function TaskListView({
   onQuickStatus: (id: string, st: TaskStatus) => void;
   onDelete: (id: string) => void;
   isManagerOrAdmin: boolean;
+  userId: string | null;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   return (
