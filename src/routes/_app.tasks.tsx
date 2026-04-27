@@ -1429,13 +1429,18 @@ function TaskSidePanel({
                   <button
                     onClick={async () => {
                       await update({ status: "done" as TaskStatus, approved_by: user?.id ?? null, approved_at: new Date().toISOString() });
-                      if (task.task_type === "external" && task.service_value && task.assignee_id) {
+                      if (task.task_type === "external" && task.assignee_id) {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const { data: ex } = await (supabase.from("payments") as any).select("id").eq("task_id", task.id).eq("status", "pending").maybeSingle();
                         if (!ex) {
-                          await supabase.from("payments").insert([{ description: `Pagamento ref. tarefa: ${task.title}`, amount: task.service_value, beneficiary_user_id: task.assignee_id, status: "pending", due_date: new Date(Date.now() + 5*86400000).toISOString().slice(0,10), task_id: task.id, project_id: task.project_id, created_by: user?.id ?? null }]);
-                          toast.success("✅ Aprovada! Pagamento PJ registrado.");
-                        } else { toast.success("✅ Tarefa aprovada!"); }
+                          const amount = task.service_value ?? 0;
+                          await supabase.from("payments").insert([{ description: `Pagamento ref. tarefa: ${task.title}`, amount, beneficiary_user_id: task.assignee_id, status: "pending", due_date: new Date(Date.now() + 5*86400000).toISOString().slice(0,10), task_id: task.id, project_id: task.project_id, created_by: user?.id ?? null }]);
+                          if (amount === 0) {
+                            toast.success("✅ Aprovada! Pagamento registrado — edite o valor no módulo Pagamentos.");
+                          } else {
+                            toast.success(`✅ Aprovada! Pagamento de ${amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} registrado para o PJ.`);
+                          }
+                        } else { toast.success("✅ Tarefa aprovada! Pagamento já existia."); }
                       } else { toast.success("✅ Tarefa aprovada e concluída!"); }
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-sm transition-all active:scale-95">
