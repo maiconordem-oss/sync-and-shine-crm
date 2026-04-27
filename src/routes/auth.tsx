@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
@@ -21,6 +22,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
@@ -31,6 +34,18 @@ function AuthPage() {
   if (!loading && isAuthenticated) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Redirecionando...</div>;
   }
+
+  const onForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) { toast.error("Digite seu e-mail primeiro."); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/auth",
+    });
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    setResetSent(true);
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,9 +135,45 @@ function AuthPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={busy}>
-                  {busy ? "Aguarde..." : tab === "signin" ? "Entrar" : "Criar conta"}
-                </Button>
+                {tab === "signin" && !forgotMode && (
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setResetSent(false); }}
+                    className="text-xs text-primary hover:underline w-full text-right -mt-2"
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
+
+                {forgotMode ? (
+                  <div className="space-y-3">
+                    {resetSent ? (
+                      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 text-center">
+                        ✅ E-mail enviado! Verifique sua caixa de entrada e clique no link para redefinir a senha.
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onForgotPassword}
+                        disabled={busy}
+                        className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-sm disabled:opacity-50"
+                      >
+                        {busy ? "Enviando..." : "Enviar link de redefinição"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setForgotMode(false); setResetSent(false); }}
+                      className="text-xs text-muted-foreground hover:underline w-full text-center"
+                    >
+                      ← Voltar para o login
+                    </button>
+                  </div>
+                ) : (
+                  <Button type="submit" className="w-full" disabled={busy}>
+                    {busy ? "Aguarde..." : tab === "signin" ? "Entrar" : "Criar conta"}
+                  </Button>
+                )}
               </form>
             </Tabs>
           </CardContent>
