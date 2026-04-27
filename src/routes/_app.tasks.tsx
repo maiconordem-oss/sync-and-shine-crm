@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -43,8 +43,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/_app/tasks")({
-  component: TasksPage,
+  component: TasksRoute,
 });
+
+function TasksRoute() {
+  const location = useLocation();
+  const isTaskDetailRoute = location.pathname.startsWith("/tasks/");
+
+  if (isTaskDetailRoute) return <Outlet />;
+
+  return <TasksPage />;
+}
 
 type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "waiting" | "awaiting_approval";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
