@@ -464,6 +464,7 @@ export type Database = {
           permission: string
           role: string
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
@@ -472,6 +473,7 @@ export type Database = {
           permission: string
           role: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
@@ -480,6 +482,7 @@ export type Database = {
           permission?: string
           role?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -727,6 +730,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_pj_tasks_for_report: {
+        Args: { end_iso: string; start_iso: string }
+        Returns: {
+          approved_at: string
+          assignee_id: string
+          completed_at: string
+          id: string
+          service_value: number
+          status: string
+          task_type: string
+          title: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
