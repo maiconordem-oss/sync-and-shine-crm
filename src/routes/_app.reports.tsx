@@ -469,6 +469,7 @@ function PJRow({
 }) {
   const { closure } = row;
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
+  const { can } = useAuth();
   const isPaid = closure?.status === "paid";
 
   return (
@@ -674,7 +675,7 @@ function PJRow({
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button
+              {can("reports.export") && <Button
                 size="sm"
                 variant="outline"
                 className="text-xs"
@@ -757,7 +758,7 @@ function PJRow({
                 }}
               >
                 <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir / PDF
-              </Button>
+              </Button>}
               {!isClosed && (
                 <Button size="sm" className="text-xs" onClick={onClose} disabled={busy || row.totalToPay === 0}>
                   <Lock className="h-3.5 w-3.5 mr-1" />
@@ -820,7 +821,7 @@ function KpiCard({ icon: Icon, label, value, accent }: { icon: React.ComponentTy
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 function ReportsPage() {
-  const { user, isManagerOrAdmin, roles } = useAuth();
+  const { user, isManagerOrAdmin, roles, can } = useAuth();
   const isPJ = !isManagerOrAdmin && roles.includes("member");
 
   if (!user) return null;

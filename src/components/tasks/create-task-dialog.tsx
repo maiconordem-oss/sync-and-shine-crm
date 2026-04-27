@@ -37,7 +37,7 @@ function getDomain(url: string) {
 }
 
 export function CreateTaskDialog({ open, onOpenChange, projects, profiles, parentTaskId, defaultProjectId, onCreated }: Props) {
-  const { user, profile } = useAuth();
+  const { user, profile, can } = useAuth();
 
   // Core fields
   const [title, setTitle] = useState("");
@@ -192,11 +192,11 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
           <div className="flex items-center justify-between gap-3">
             <DialogTitle className="text-lg">{parentTaskId ? "Nova subtarefa" : "Nova tarefa"}</DialogTitle>
             <div className="flex items-center gap-2">
-              <TemplatePicker onApply={applyTemplate} />
-              <button type="button" onClick={() => setShowTemplatesManager(true)}
+              {can("tasks.use_templates") && <TemplatePicker onApply={applyTemplate} />}
+              {can("tasks.use_templates") && <button type="button" onClick={() => setShowTemplatesManager(true)}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border rounded-md px-2 py-1 hover:bg-muted">
                 <FileText className="h-3.5 w-3.5" /> Gerenciar modelos
-              </button>
+              </button>}
             </div>
           </div>
         </DialogHeader>

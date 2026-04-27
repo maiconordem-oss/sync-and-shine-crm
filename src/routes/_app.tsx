@@ -69,6 +69,7 @@ const NAV: NavItem[] = [
   { to: "/chat", label: "Chat", icon: MessageSquare, permKey: "chat.access" },
   { to: "/automations", label: "Automações", icon: Workflow, managerOnly: true, permKey: "automations.edit" },
   { to: "/members", label: "Membros", icon: Users, adminOnly: true, permKey: "members.manage" },
+  // members.view handled by adminOnly above
   { to: "/permissions", label: "Permissões", icon: ShieldCheck, adminOnly: true },
 ];
 

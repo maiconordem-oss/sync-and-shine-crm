@@ -128,7 +128,7 @@ interface SubTask {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function TasksPage() {
-  const { user, profile, loading, isAuthenticated, isAdmin, isManagerOrAdmin, canCreateTasks } = useAuth();
+  const { user, profile, loading, isAuthenticated, isAdmin, isManagerOrAdmin, canCreateTasks, can } = useAuth();
   const { play: playSound } = useSound();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list" | "calendar">("kanban");
@@ -259,7 +259,7 @@ function TasksPage() {
               <CalendarDays className="h-4 w-4 mr-1" /> Calendário
             </Button>
           </div>
-          {canCreateTasks && (
+          {canCreateTasks && can("tasks.create") && (
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> Nova tarefa
             </Button>
@@ -532,7 +532,8 @@ function KanbanCard({
   onQuickStatus: (id: string, st: TaskStatus) => void;
   onDelete: (id: string) => void;
 }) {
-  const canDeleteCard = isAdmin || userId === task.created_by;
+  const { can: canPerm } = useAuth();
+  const canDeleteCard = isAdmin || userId === task.created_by || canPerm("tasks.delete_any");
   const cardNavigate = useNavigate();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const proj = projectById(task.project_id);
@@ -1083,7 +1084,7 @@ function TaskSidePanel({
   onTaskUpdate: (t: TaskRow) => void;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, can } = useAuth();
   const { play: playSound } = useSound();
   const [task, setTask] = useState<TaskRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1291,7 +1292,7 @@ function TaskSidePanel({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {activeTimer ? (
+          {can("tasks.use_timer") && (activeTimer ? (
             <button onClick={stopTimer} className="flex items-center gap-1.5 text-xs bg-rose-100 text-rose-700 rounded-md px-3 py-1.5 hover:bg-rose-200 font-medium">
               <Square className="h-3.5 w-3.5" /> Parar timer
             </button>
@@ -1299,7 +1300,7 @@ function TaskSidePanel({
             <button onClick={startTimer} className="flex items-center gap-1.5 text-xs border rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted font-medium">
               <Play className="h-3.5 w-3.5" /> Timer
             </button>
-          )}
+          ))}
           {canDelete && (
             <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Excluir">
               <Trash2 className="h-4 w-4" />
