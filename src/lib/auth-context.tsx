@@ -146,6 +146,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [roles.join(","), isPJ]);
 
+  // Realtime: recarrega permissões quando admin altera no painel
+  React.useEffect(() => {
+    if (!roles.length || roles.includes("admin")) return;
+    const roleKey = roles.includes("manager") ? "manager" : isPJ ? "pj" : "member";
+    const channel = supabase
+      .channel("role_permissions_changes")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "role_permissions",
+        filter: `role=eq.${roleKey}`,
+      }, (payload) => {
+        const row = payload.new as { permission: string; enabled: boolean };
+        if (row?.permission) {
+          setRolePerms((prev) => ({ ...prev, [row.permission]: row.enabled }));
+        }
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [roles.join(","), isPJ]);
+
   const can = React.useCallback((permission: string): boolean => {
     if (roles.includes("admin")) return true; // admin can always
     return rolePerms[permission] ?? true; // default true if table not loaded yet
