@@ -582,6 +582,11 @@ function KanbanCard({
                 <DropdownMenuItem onClick={() => onOpenPanel(task.id)}>
                   <Edit3 className="h-3.5 w-3.5 mr-2" /> Abrir painel
                 </DropdownMenuItem>
+                {(isManagerOrAdmin || userId === task.created_by) && (
+                  <DropdownMenuItem onClick={() => window.location.assign(`/tasks/${task.id}`)}>
+                    <Edit3 className="h-3.5 w-3.5 mr-2" /> Editar tarefa
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <div className="px-2 py-1 text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Mover para</div>
                 {STATUS_ORDER.filter((s) => s !== task.status).map((s) => (
