@@ -21,9 +21,11 @@ CREATE POLICY "tasks_rls_v3" ON public.tasks
   USING (
     -- Admin: vê tudo
     EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin')
-    -- Responsável: sempre vê suas tarefas (gestor, CLT e PJ)
+    -- Gestor: vê tudo (necessário para relatórios e gestão de equipe)
+    OR EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'manager')
+    -- Responsável: sempre vê suas tarefas
     OR assignee_id = auth.uid()
-    -- Criador: sempre vê o que criou (gestor, CLT)
+    -- Criador: sempre vê o que criou
     OR created_by = auth.uid()
   );
 
