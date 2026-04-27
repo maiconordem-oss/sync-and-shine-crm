@@ -10,7 +10,7 @@ import { formatBRL, formatDate, formatDateTime } from "@/lib/format";
 import {
   BarChart3, Users, CheckCircle2, Wallet, TrendingUp,
   Lock, Unlock, FileDown, X, AlertTriangle, ChevronDown,
-  ChevronUp, Receipt, CalendarCheck,
+  ChevronUp, Receipt, CalendarCheck, Printer,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
@@ -674,6 +674,78 @@ function PJRow({
             )}
 
             <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => {
+                  const printContent = document.getElementById(`pj-report-${row.pj.id}`);
+                  if (!printContent) return;
+                  const win = window.open("", "_blank", "width=800,height=600");
+                  if (!win) return;
+                  win.document.write(`
+                    <html><head><title>Relatório PJ — ${row.pj.full_name ?? row.pj.email}</title>
+                    <style>
+                      body { font-family: sans-serif; padding: 24px; color: #111; }
+                      h1 { font-size: 18px; margin-bottom: 4px; }
+                      h2 { font-size: 13px; color: #666; font-weight: normal; margin-bottom: 20px; }
+                      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+                      th { background: #f5f5f5; text-align: left; padding: 8px 10px; font-size: 12px; border-bottom: 2px solid #ddd; }
+                      td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid #eee; }
+                      .total { font-weight: bold; font-size: 14px; }
+                      .pending { color: #b45309; }
+                      .paid { color: #065f46; }
+                      .header { display: flex; justify-content: space-between; align-items: flex-start; }
+                      .meta { font-size: 12px; color: #666; line-height: 1.8; }
+                      @media print { body { padding: 0; } }
+                    </style></head><body>
+                    <div class="header">
+                      <div>
+                        <h1>${row.pj.full_name ?? "Prestador PJ"}</h1>
+                        <h2>${row.pj.email ?? ""}</h2>
+                      </div>
+                      <div class="meta">
+                        Período: ${new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}<br/>
+                        Gerado em: ${new Date().toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Tarefa</th>
+                          <th>Conclusão</th>
+                          <th style="text-align:right">Valor</th>
+                          <th style="text-align:center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${row.tasks.map(t => {
+                          const pay = row.payments.find(p => p.task_id === t.id && p.status !== "cancelled");
+                          return `<tr>
+                            <td>${t.title}</td>
+                            <td>${t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
+                            <td style="text-align:right">${t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".", ",") : "—"}</td>
+                            <td style="text-align:center">${pay?.status === "paid" ? "✓ Pago" : "⏳ Pendente"}</td>
+                          </tr>`;
+                        }).join("")}
+                      </tbody>
+                    </table>
+                    <table style="margin-top:24px; width:320px; margin-left:auto">
+                      <tr><td>Tarefas concluídas</td><td style="text-align:right">${row.completedTasks}</td></tr>
+                      <tr><td class="pending">A receber (pendente)</td><td style="text-align:right" class="pending">R$ ${row.totalPending.toFixed(2).replace(".", ",")}</td></tr>
+                      <tr><td class="paid">Já pago</td><td style="text-align:right" class="paid">R$ ${row.totalPaid.toFixed(2).replace(".", ",")}</td></tr>
+                      <tr class="total"><td>Total do período</td><td style="text-align:right">R$ ${row.totalToPay.toFixed(2).replace(".", ",")}</td></tr>
+                    </table>
+                    ${row.closure?.notes ? `<p style="margin-top:16px;font-size:12px;color:#666"><strong>Observações:</strong> ${row.closure.notes}</p>` : ""}
+                    </body></html>
+                  `);
+                  win.document.close();
+                  win.focus();
+                  setTimeout(() => { win.print(); }, 500);
+                }}
+              >
+                <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir / PDF
+              </Button>
               {!isClosed && (
                 <Button size="sm" className="text-xs" onClick={onClose} disabled={busy || row.totalToPay === 0}>
                   <Lock className="h-3.5 w-3.5 mr-1" />
