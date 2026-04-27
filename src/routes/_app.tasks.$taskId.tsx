@@ -228,7 +228,7 @@ function TaskDetailPage() {
   };
 
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
-  const canEditTask = isManagerOrAdmin || user?.id === task?.created_by || user?.id === task?.assignee_id;
+  const canEditTask = isManagerOrAdmin || user?.id === task?.created_by; // só criador, gestor ou admin
   const canManageAssignee = isManagerOrAdmin;
   const canDeleteTask = isAdmin || user?.id === task?.created_by;
 
