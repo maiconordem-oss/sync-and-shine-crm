@@ -348,6 +348,7 @@ function TasksPage() {
               onQuickStatus={quickStatusChange}
               onDelete={deleteTask}
               isManagerOrAdmin={isManagerOrAdmin}
+              userId={user?.id ?? null}
               navigate={navigate}
             />
           ) : (
@@ -581,6 +582,11 @@ function KanbanCard({
                 <DropdownMenuItem onClick={() => onOpenPanel(task.id)}>
                   <Edit3 className="h-3.5 w-3.5 mr-2" /> Abrir painel
                 </DropdownMenuItem>
+                {(isManagerOrAdmin || userId === task.created_by) && (
+                  <DropdownMenuItem onClick={() => window.location.assign(`/tasks/${task.id}`)}>
+                    <Edit3 className="h-3.5 w-3.5 mr-2" /> Editar tarefa
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <div className="px-2 py-1 text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Mover para</div>
                 {STATUS_ORDER.filter((s) => s !== task.status).map((s) => (
@@ -649,7 +655,7 @@ function KanbanCard({
 
 function TaskListView({
   tasks, profileById, projectById, activePanelId, onOpenPanel,
-  onQuickStatus, onDelete, isManagerOrAdmin, navigate,
+  onQuickStatus, onDelete, isManagerOrAdmin, userId, navigate,
 }: {
   tasks: TaskRow[];
   profileById: (id: string | null) => ProfileLite | undefined;
@@ -659,6 +665,7 @@ function TaskListView({
   onQuickStatus: (id: string, st: TaskStatus) => void;
   onDelete: (id: string) => void;
   isManagerOrAdmin: boolean;
+  userId: string | null;
   navigate: ReturnType<typeof useNavigate>;
 }) {
   return (
@@ -745,6 +752,11 @@ function TaskListView({
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem onClick={() => onOpenPanel(t.id)}><Edit3 className="h-3.5 w-3.5 mr-2" /> Ver painel</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: t.id } })}><ExternalLink className="h-3.5 w-3.5 mr-2" /> Página completa</DropdownMenuItem>
+                      {(isManagerOrAdmin || userId === t.created_by) && (
+                        <DropdownMenuItem onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: t.id } })}>
+                          <Edit3 className="h-3.5 w-3.5 mr-2" /> Editar tarefa
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <div className="px-2 py-1 text-[10px] text-muted-foreground font-medium uppercase">Mover para</div>
                       {STATUS_ORDER.filter((s) => s !== t.status).map((s) => (
