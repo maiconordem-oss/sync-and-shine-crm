@@ -64,6 +64,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/tasks", label: "Tarefas", icon: KanbanSquare },
+  { to: "/recurring-tasks", label: "Tarefas recorrentes", icon: Repeat, managerOnly: true },
   { to: "/projects", label: "Projetos", icon: FolderKanban },
   { to: "/payments", label: "Pagamentos", icon: Wallet, permKey: "payments.manage" },
   { to: "/reports", label: "Relatórios", icon: BarChart3, permKey: "reports.view_all" },
