@@ -13,10 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { Plus, Edit3, Trash2, Repeat } from "lucide-react";
 import { PRIORITY_LABEL } from "@/lib/labels";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/recurring-tasks")({
   component: RecurringTasksPage,
 });
+
+type Frequency = "monthly" | "weekly";
 
 type Recurring = {
   id: string;
@@ -27,14 +30,34 @@ type Recurring = {
   priority: "low" | "medium" | "high" | "urgent";
   task_type: "internal" | "external";
   service_value: number | null;
-  day_of_month: number;
+  frequency: Frequency;
+  day_of_month: number | null;
+  days_of_week: number[];
   due_offset_days: number;
   active: boolean;
   last_generated_month: string | null;
+  last_generated_date: string | null;
 };
 
 type Project = { id: string; name: string };
 type Profile = { id: string; full_name: string | null; contract_type: "clt" | "pj" | null };
+
+const WEEK_DAYS = [
+  { value: 1, short: "Seg", label: "Segunda" },
+  { value: 2, short: "Ter", label: "Terça" },
+  { value: 3, short: "Qua", label: "Quarta" },
+  { value: 4, short: "Qui", label: "Quinta" },
+  { value: 5, short: "Sex", label: "Sexta" },
+  { value: 6, short: "Sáb", label: "Sábado" },
+  { value: 0, short: "Dom", label: "Domingo" },
+];
+
+function formatSchedule(it: Recurring) {
+  if (it.frequency === "monthly") return `Mensal — dia ${it.day_of_month ?? "?"}`;
+  if (!it.days_of_week?.length) return "Semanal — sem dias";
+  const labels = WEEK_DAYS.filter((d) => it.days_of_week.includes(d.value)).map((d) => d.short);
+  return `Semanal — ${labels.join(", ")}`;
+}
 
 function RecurringTasksPage() {
   const { user, isManagerOrAdmin } = useAuth();
@@ -48,7 +71,7 @@ function RecurringTasksPage() {
   const load = async () => {
     setLoading(true);
     const [r, p, pr] = await Promise.all([
-      (supabase.from("recurring_tasks" as never) as any).select("*").order("day_of_month"),
+      (supabase.from("recurring_tasks" as never) as any).select("*").order("title"),
       supabase.from("projects").select("id,name").eq("archived", false).order("name"),
       supabase.from("profiles").select("id,full_name,contract_type").order("full_name"),
     ]);
@@ -84,7 +107,7 @@ function RecurringTasksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Repeat className="h-6 w-6" /> Tarefas recorrentes</h1>
-          <p className="text-sm text-muted-foreground">Modelos que geram uma tarefa automaticamente todo mês no dia configurado.</p>
+          <p className="text-sm text-muted-foreground">Modelos que geram tarefas automaticamente — mensalmente ou em dias específicos da semana.</p>
         </div>
         <Button onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova recorrência
@@ -96,7 +119,7 @@ function RecurringTasksPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Título</TableHead>
-              <TableHead>Dia do mês</TableHead>
+              <TableHead>Recorrência</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead>Projeto</TableHead>
               <TableHead>Prioridade</TableHead>
@@ -113,14 +136,15 @@ function RecurringTasksPage() {
             {items.map((it) => {
               const ass = profiles.find((p) => p.id === it.assignee_id);
               const pj = projects.find((p) => p.id === it.project_id);
+              const lastGen = it.frequency === "monthly" ? it.last_generated_month : it.last_generated_date;
               return (
                 <TableRow key={it.id}>
                   <TableCell className="font-medium">{it.title}</TableCell>
-                  <TableCell>Dia {it.day_of_month}</TableCell>
+                  <TableCell className="text-sm">{formatSchedule(it)}</TableCell>
                   <TableCell>{ass?.full_name ?? "—"}</TableCell>
                   <TableCell>{pj?.name ?? "—"}</TableCell>
                   <TableCell>{PRIORITY_LABEL[it.priority]}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{it.last_generated_month ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{lastGen ?? "—"}</TableCell>
                   <TableCell><Switch checked={it.active} onCheckedChange={(v) => void toggleActive(it.id, v)} /></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => { setEditing(it); setOpen(true); }}><Edit3 className="h-4 w-4" /></Button>
@@ -164,7 +188,9 @@ function RecurringDialog({
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
   const [taskType, setTaskType] = useState<"internal" | "external">("internal");
   const [serviceValue, setServiceValue] = useState("");
+  const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [dayOfMonth, setDayOfMonth] = useState(5);
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
   const [dueOffset, setDueOffset] = useState(0);
   const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -179,20 +205,32 @@ function RecurringDialog({
       setPriority(editing.priority);
       setTaskType(editing.task_type);
       setServiceValue(editing.service_value ? String(editing.service_value) : "");
-      setDayOfMonth(editing.day_of_month);
+      setFrequency(editing.frequency ?? "monthly");
+      setDayOfMonth(editing.day_of_month ?? 5);
+      setDaysOfWeek(editing.days_of_week ?? []);
       setDueOffset(editing.due_offset_days);
       setActive(editing.active);
     } else {
       setTitle(""); setDescription(""); setProjectId("none"); setAssigneeId("none");
       setPriority("medium"); setTaskType("internal"); setServiceValue("");
-      setDayOfMonth(5); setDueOffset(0); setActive(true);
+      setFrequency("monthly"); setDayOfMonth(5); setDaysOfWeek([1, 2, 3, 4, 5]);
+      setDueOffset(0); setActive(true);
     }
   }, [open, editing]);
+
+  const toggleDay = (d: number) => {
+    setDaysOfWeek((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort());
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { toast.error("Informe o título."); return; }
-    if (dayOfMonth < 1 || dayOfMonth > 31) { toast.error("Dia do mês entre 1 e 31."); return; }
+    if (frequency === "monthly" && (dayOfMonth < 1 || dayOfMonth > 31)) {
+      toast.error("Dia do mês entre 1 e 31."); return;
+    }
+    if (frequency === "weekly" && daysOfWeek.length === 0) {
+      toast.error("Selecione ao menos um dia da semana."); return;
+    }
     setBusy(true);
     const payload = {
       title: title.trim(),
@@ -202,7 +240,9 @@ function RecurringDialog({
       priority,
       task_type: taskType,
       service_value: taskType === "external" && serviceValue ? Number(serviceValue) : null,
-      day_of_month: dayOfMonth,
+      frequency,
+      day_of_month: frequency === "monthly" ? dayOfMonth : null,
+      days_of_week: frequency === "weekly" ? daysOfWeek : [],
       due_offset_days: dueOffset,
       active,
     };
@@ -218,7 +258,7 @@ function RecurringDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar" : "Nova"} tarefa recorrente</DialogTitle>
         </DialogHeader>
@@ -232,13 +272,58 @@ function RecurringDialog({
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label>Frequência *</Label>
+            <Select value={frequency} onValueChange={(v) => setFrequency(v as Frequency)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monthly">Mensal (dia X do mês)</SelectItem>
+                <SelectItem value="weekly">Semanal (dias da semana)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {frequency === "monthly" && (
             <div className="space-y-1.5">
               <Label>Dia do mês *</Label>
               <Input type="number" min={1} max={31} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} />
               <p className="text-[11px] text-muted-foreground">Se o mês não tiver esse dia, usa o último.</p>
             </div>
+          )}
+
+          {frequency === "weekly" && (
             <div className="space-y-1.5">
+              <Label>Dias da semana *</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEK_DAYS.map((d) => {
+                  const selected = daysOfWeek.includes(d.value);
+                  return (
+                    <button
+                      type="button"
+                      key={d.value}
+                      onClick={() => toggleDay(d.value)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                        selected
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-foreground border-input hover:bg-accent"
+                      )}
+                    >
+                      {d.short}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setDaysOfWeek([1, 2, 3, 4, 5])}>Seg–Sex</button>
+                <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setDaysOfWeek([0, 1, 2, 3, 4, 5, 6])}>Todos</button>
+                <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => setDaysOfWeek([])}>Limpar</button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5 col-span-2">
               <Label>Prazo (dias após gerar)</Label>
               <Input type="number" min={0} value={dueOffset} onChange={(e) => setDueOffset(Number(e.target.value))} />
             </div>
