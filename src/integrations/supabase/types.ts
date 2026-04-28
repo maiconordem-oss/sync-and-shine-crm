@@ -456,6 +456,60 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_tasks: {
+        Row: {
+          active: boolean
+          assignee_id: string | null
+          created_at: string
+          created_by: string | null
+          day_of_month: number
+          description: string | null
+          due_offset_days: number
+          id: string
+          last_generated_month: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          project_id: string | null
+          service_value: number | null
+          task_type: Database["public"]["Enums"]["task_type"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month: number
+          description?: string | null
+          due_offset_days?: number
+          id?: string
+          last_generated_month?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          service_value?: number | null
+          task_type?: Database["public"]["Enums"]["task_type"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number
+          description?: string | null
+          due_offset_days?: number
+          id?: string
+          last_generated_month?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          project_id?: string | null
+          service_value?: number | null
+          task_type?: Database["public"]["Enums"]["task_type"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       role_permissions: {
         Row: {
           created_at: string
@@ -730,6 +784,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_recurring_tasks_for_today: { Args: never; Returns: number }
       get_pj_tasks_for_report: {
         Args: { end_iso: string; start_iso: string }
         Returns: {
