@@ -462,10 +462,13 @@ export type Database = {
           assignee_id: string | null
           created_at: string
           created_by: string | null
-          day_of_month: number
+          day_of_month: number | null
+          days_of_week: number[]
           description: string | null
           due_offset_days: number
+          frequency: string
           id: string
+          last_generated_date: string | null
           last_generated_month: string | null
           priority: Database["public"]["Enums"]["task_priority"]
           project_id: string | null
@@ -479,10 +482,13 @@ export type Database = {
           assignee_id?: string | null
           created_at?: string
           created_by?: string | null
-          day_of_month: number
+          day_of_month?: number | null
+          days_of_week?: number[]
           description?: string | null
           due_offset_days?: number
+          frequency?: string
           id?: string
+          last_generated_date?: string | null
           last_generated_month?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
@@ -496,10 +502,13 @@ export type Database = {
           assignee_id?: string | null
           created_at?: string
           created_by?: string | null
-          day_of_month?: number
+          day_of_month?: number | null
+          days_of_week?: number[]
           description?: string | null
           due_offset_days?: number
+          frequency?: string
           id?: string
+          last_generated_date?: string | null
           last_generated_month?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           project_id?: string | null
