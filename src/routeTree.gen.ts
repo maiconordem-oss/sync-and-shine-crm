@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTasksRouteImport } from './routes/_app.tasks'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
+import { Route as AppRecurringTasksRouteImport } from './routes/_app.recurring-tasks'
 import { Route as AppProjectsRouteImport } from './routes/_app.projects'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
 import { Route as AppPermissionsRouteImport } from './routes/_app.permissions'
@@ -48,6 +49,11 @@ const AppTasksRoute = AppTasksRouteImport.update({
 const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRecurringTasksRoute = AppRecurringTasksRouteImport.update({
+  id: '/recurring-tasks',
+  path: '/recurring-tasks',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProjectsRoute = AppProjectsRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/permissions': typeof AppPermissionsRoute
   '/profile': typeof AppProfileRoute
   '/projects': typeof AppProjectsRoute
+  '/recurring-tasks': typeof AppRecurringTasksRoute
   '/reports': typeof AppReportsRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/permissions': typeof AppPermissionsRoute
   '/profile': typeof AppProfileRoute
   '/projects': typeof AppProjectsRoute
+  '/recurring-tasks': typeof AppRecurringTasksRoute
   '/reports': typeof AppReportsRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_app/permissions': typeof AppPermissionsRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/projects': typeof AppProjectsRoute
+  '/_app/recurring-tasks': typeof AppRecurringTasksRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/permissions'
     | '/profile'
     | '/projects'
+    | '/recurring-tasks'
     | '/reports'
     | '/tasks'
     | '/tasks/$taskId'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/permissions'
     | '/profile'
     | '/projects'
+    | '/recurring-tasks'
     | '/reports'
     | '/tasks'
     | '/tasks/$taskId'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/_app/permissions'
     | '/_app/profile'
     | '/_app/projects'
+    | '/_app/recurring-tasks'
     | '/_app/reports'
     | '/_app/tasks'
     | '/_app/tasks/$taskId'
@@ -255,6 +267,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/recurring-tasks': {
+      id: '/_app/recurring-tasks'
+      path: '/recurring-tasks'
+      fullPath: '/recurring-tasks'
+      preLoaderRoute: typeof AppRecurringTasksRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/projects': {
@@ -360,6 +379,7 @@ interface AppRouteChildren {
   AppPermissionsRoute: typeof AppPermissionsRoute
   AppProfileRoute: typeof AppProfileRoute
   AppProjectsRoute: typeof AppProjectsRoute
+  AppRecurringTasksRoute: typeof AppRecurringTasksRoute
   AppReportsRoute: typeof AppReportsRoute
   AppTasksRoute: typeof AppTasksRouteWithChildren
 }
@@ -375,6 +395,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPermissionsRoute: AppPermissionsRoute,
   AppProfileRoute: AppProfileRoute,
   AppProjectsRoute: AppProjectsRoute,
+  AppRecurringTasksRoute: AppRecurringTasksRoute,
   AppReportsRoute: AppReportsRoute,
   AppTasksRoute: AppTasksRouteWithChildren,
 }
