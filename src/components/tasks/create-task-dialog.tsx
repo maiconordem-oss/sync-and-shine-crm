@@ -23,6 +23,9 @@ interface Props {
   profiles: { id: string; full_name: string | null; contract_type?: "clt" | "pj" | null }[];
   parentTaskId?: string;
   defaultProjectId?: string;
+  defaultAssigneeId?: string;
+  defaultPriority?: "low" | "medium" | "high" | "urgent";
+  defaultTaskType?: "internal" | "external";
   onCreated?: () => void;
 }
 
@@ -36,7 +39,7 @@ function getDomain(url: string) {
   try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
 }
 
-export function CreateTaskDialog({ open, onOpenChange, projects, profiles, parentTaskId, defaultProjectId, onCreated }: Props) {
+export function CreateTaskDialog({ open, onOpenChange, projects, profiles, parentTaskId, defaultProjectId, defaultAssigneeId, defaultPriority, defaultTaskType, onCreated }: Props) {
   const { user, profile, can } = useAuth();
 
   // Core fields
@@ -69,11 +72,14 @@ export function CreateTaskDialog({ open, onOpenChange, projects, profiles, paren
 
   useEffect(() => {
     if (!open || !user) return;
-    setAssigneeId(user.id);
+    // Se é subtarefa, herda dados da tarefa pai; senão usa o usuário logado
+    setAssigneeId(defaultAssigneeId ?? user.id);
     setProjectId(defaultProjectId ?? "none");
+    setPriority(defaultPriority ?? "medium");
+    setTaskType(defaultTaskType ?? "internal");
     setDueDate(defaultDueDate());
     setTimeout(() => titleRef.current?.focus(), 50);
-  }, [open, user, defaultProjectId]);
+  }, [open, user, defaultProjectId, defaultAssigneeId, defaultPriority, defaultTaskType]);
 
   const selectedAssignee = useMemo(
     () => profiles.find((p) => p.id === (assigneeId === "none" ? null : assigneeId)),

@@ -1097,6 +1097,7 @@ function TaskSidePanel({
   const [activeTimer, setActiveTimer] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<"chat" | "checklist" | "files" | "time">("chat");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [createSubOpen, setCreateSubOpen] = useState(false);
   const [history, setHistory] = useState<Array<{ id: string; action: string; field: string | null; old_value: string | null; new_value: string | null; user_id: string | null; created_at: string }>>([]);
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -1159,6 +1160,7 @@ function TaskSidePanel({
   };
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
+  const canEdit = isManagerOrAdmin || user?.id === task?.created_by;
   const canDelete = isAdmin || user?.id === task?.created_by; // admin ou proprietário
   const isAssignee = user?.id === task?.assignee_id;
   const totalMin = timeEntries.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
@@ -1399,18 +1401,30 @@ function TaskSidePanel({
             )}
 
             {/* Subtarefas */}
-            {subtasks.length > 0 && (
-              <div>
-                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Subtarefas ({subtasks.length})</div>
-                {subtasks.map((s) => (
-                  <div key={s.id} className="flex items-center gap-2 py-1.5 border-b last:border-0">
-                    <div className={cn("h-2 w-2 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
-                    <span className={cn("text-sm flex-1", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
-                    <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
-                  </div>
-                ))}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Subtarefas {subtasks.length > 0 && `(${subtasks.length})`}
+                </div>
+                {canEdit && (
+                  <button onClick={() => setCreateSubOpen(true)}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Plus className="h-3 w-3" /> Nova subtarefa
+                  </button>
+                )}
               </div>
-            )}
+              {subtasks.length === 0 && (
+                <p className="text-xs text-muted-foreground">Nenhuma subtarefa ainda.</p>
+              )}
+              {subtasks.map((s) => (
+                <div key={s.id} className="flex items-center gap-2 py-1.5 border-b last:border-0 cursor-pointer hover:bg-muted/20 rounded px-1"
+                  onClick={() => navigate({ to: "/tasks/$taskId", params: { taskId: s.id } })}>
+                  <div className={cn("h-2 w-2 rounded-full shrink-0", s.status === "done" ? "bg-emerald-500" : "bg-slate-400")} />
+                  <span className={cn("text-sm flex-1", s.status === "done" && "line-through text-muted-foreground")}>{s.title}</span>
+                  <Badge variant="outline" className="text-[9px] px-1 h-4">{STATUS_LABEL[s.status]}</Badge>
+                </div>
+              ))}
+            </div>
 
             {/* Links */}
             <div>
@@ -1713,6 +1727,19 @@ function TaskSidePanel({
           )}
         </div>
       </div>
+
+      <CreateTaskDialog
+        open={createSubOpen}
+        onOpenChange={setCreateSubOpen}
+        projects={projects}
+        profiles={profiles}
+        parentTaskId={task.id}
+        defaultProjectId={task.project_id ?? undefined}
+        defaultAssigneeId={task.assignee_id ?? undefined}
+        defaultPriority={task.priority}
+        defaultTaskType={task.task_type}
+        onCreated={() => void loadPanel()}
+      />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
