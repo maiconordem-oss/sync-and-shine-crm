@@ -341,9 +341,13 @@ function AdminView() {
     setClosureBusy(pjId);
     const existing = closures.find((c) => c.pj_user_id === pjId);
     if (!existing) { toast.error("Feche o mês antes de marcar como pago."); setClosureBusy(null); return; }
-    // Marcar como pago apenas os pagamentos pendentes DESTE mês (mesmo escopo do fechamento)
+    // Apenas pagamentos do mês selecionado:
+    //  - vinculados a tarefas APROVADAS/CONCLUÍDAS neste mês (presentes em `tasks`)
+    //  - OU manuais (sem task_id) com vencimento no mês
+    const monthTaskIds = new Set(tasks.filter((t) => t.assignee_id === pjId).map((t) => t.id));
     const idsToPay = payments
       .filter((p) => p.beneficiary_user_id === pjId && p.status === "pending")
+      .filter((p) => (p.task_id ? monthTaskIds.has(p.task_id) : true))
       .map((p) => p.id);
     if (idsToPay.length > 0) {
       const { error: payErr } = await supabase.from("payments")
