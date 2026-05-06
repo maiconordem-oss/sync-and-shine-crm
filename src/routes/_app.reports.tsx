@@ -341,17 +341,21 @@ function AdminView() {
     setClosureBusy(pjId);
     const existing = closures.find((c) => c.pj_user_id === pjId);
     if (!existing) { toast.error("Feche o mês antes de marcar como pago."); setClosureBusy(null); return; }
-    // mark all pending payments as paid
-    const { error: payErr } = await supabase.from("payments")
-      .update({ status: "paid", paid_date: new Date().toISOString().slice(0, 10) })
-      .eq("beneficiary_user_id", pjId)
-      .eq("status", "pending");
-    if (payErr) { toast.error(payErr.message); setClosureBusy(null); return; }
+    // Marcar como pago apenas os pagamentos pendentes DESTE mês (mesmo escopo do fechamento)
+    const idsToPay = payments
+      .filter((p) => p.beneficiary_user_id === pjId && p.status === "pending")
+      .map((p) => p.id);
+    if (idsToPay.length > 0) {
+      const { error: payErr } = await supabase.from("payments")
+        .update({ status: "paid", paid_date: new Date().toISOString().slice(0, 10) })
+        .in("id", idsToPay);
+      if (payErr) { toast.error(payErr.message); setClosureBusy(null); return; }
+    }
     const { error } = await supabase.from("monthly_closures").update({
       status: "paid", paid_at: new Date().toISOString(), paid_by: user.id,
     }).eq("id", existing.id);
     if (error) { toast.error(error.message); setClosureBusy(null); return; }
-    toast.success("Pagamento registrado! Todos os pagamentos pendentes foram marcados como pagos.");
+    toast.success(`Pagamento registrado! ${idsToPay.length} pagamento(s) deste mês marcado(s) como pago(s).`);
     setClosureBusy(null);
     void load();
   };
