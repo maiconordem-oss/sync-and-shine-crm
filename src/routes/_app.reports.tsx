@@ -288,7 +288,19 @@ function AdminView() {
   useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo<PJRow[]>(() => pjs.map((pj) => {
-    const pjPayments = payments.filter((p) => p.beneficiary_user_id === pj.id && p.status !== "cancelled");
+    // Apenas pagamentos referentes a este mês: vinculados a tarefas concluídas no mês,
+    // OU manuais (sem task_id) — todos que estão em `payments` já passaram pelo filtro de due/created no mês.
+    // Excluir pagamentos pagos cujo paid_date é anterior ao início do mês selecionado (foram fechados em mês anterior).
+    const monthTaskIds = new Set(pjTasksAll(tasks, pj.id));
+    const pjPayments = payments.filter((p) => {
+      if (p.beneficiary_user_id !== pj.id) return false;
+      if (p.status === "cancelled") return false;
+      // Se foi pago antes do início do mês selecionado, pertence a outro fechamento
+      if (p.status === "paid" && p.paid_date && p.paid_date < startDate) return false;
+      // Se vinculado a uma tarefa que NÃO foi concluída neste mês, ignora (pertence a outro mês)
+      if (p.task_id && !monthTaskIds.has(p.task_id)) return false;
+      return true;
+    });
     const pjTasks = tasks.filter((t) => t.assignee_id === pj.id);
     const completedTasks = pjTasks.length;
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
