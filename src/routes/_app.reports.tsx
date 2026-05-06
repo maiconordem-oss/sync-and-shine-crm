@@ -309,10 +309,12 @@ function AdminView() {
     const manualTotal = manualPayments.reduce((s, p) => s + Number(p.amount), 0);
     // Total a pagar = tarefas externas concluídas no mês + pagamentos manuais do mês
     const totalToPay = sumValues + manualTotal;
-    // Pago no mês = pagamentos com paid_date dentro do mês selecionado
-    const totalPaid = pjPayments
-      .filter((p) => p.status === "paid" && p.paid_date && p.paid_date >= startDate && p.paid_date < endDate)
-      .reduce((s, p) => s + Number(p.amount), 0);
+    // Pago no mês = total do fechamento mensal deste mês quando status = 'paid'
+    // (vincula o "pago" ao mês de referência do fechamento, não à data do pagamento)
+    const closureForPj = closures.find((c) => c.pj_user_id === pj.id) ?? null;
+    const totalPaid = closureForPj && closureForPj.status === "paid"
+      ? Number(closureForPj.total_amount ?? 0)
+      : 0;
     // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
     const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
