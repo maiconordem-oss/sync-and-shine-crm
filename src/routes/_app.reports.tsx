@@ -266,15 +266,12 @@ function AdminView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [pjRes, payRes, paidRes, taskRes, closRes] = await Promise.all([
+    const [pjRes, payRes, taskRes, closRes] = await Promise.all([
       supabase.from("profiles").select("id,full_name,email,contract_type").eq("contract_type", "pj"),
-      // Pagamentos a pagar (referência do mês): pendentes/pagos cuja referência é deste mês
-      // Critério: due_date no mês OU (sem due_date e criado no mês)
+      // Pagamentos referentes ao mês: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
       ),
-      // Pagamentos efetivamente PAGOS no mês selecionado (paid_date no mês)
-      supabase.from("payments").select("*").eq("status", "paid").gte("paid_date", startDate).lt("paid_date", endDate),
       supabase.rpc("get_pj_tasks_for_report", {
         start_iso: startISO,
         end_iso: endISO,
@@ -282,11 +279,7 @@ function AdminView() {
       supabase.from("monthly_closures").select("*").eq("reference_month", month),
     ]);
     setPjs((pjRes.data ?? []) as PJProfile[]);
-    // Mescla pagamentos de referência + pagos no mês (sem duplicar por id)
-    const merged = new Map<string, PaymentRow>();
-    ((payRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
-    ((paidRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
-    setPayments(Array.from(merged.values()));
+    setPayments((payRes.data ?? []) as PaymentRow[]);
     setTasks((taskRes.data ?? []) as TaskRow[]);
     setClosures((closRes.data ?? []) as Closure[]);
     setLoading(false);
