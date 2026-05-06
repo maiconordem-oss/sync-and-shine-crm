@@ -266,11 +266,15 @@ function AdminView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [pjRes, payRes, taskRes, closRes] = await Promise.all([
+    const [pjRes, payRes, paidRes, taskRes, closRes] = await Promise.all([
       supabase.from("profiles").select("id,full_name,email,contract_type").eq("contract_type", "pj"),
+      // Pagamentos a pagar (referência do mês): pendentes/pagos cuja referência é deste mês
+      // Critério: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
       ),
+      // Pagamentos efetivamente PAGOS no mês selecionado (paid_date no mês)
+      supabase.from("payments").select("*").eq("status", "paid").gte("paid_date", startDate).lt("paid_date", endDate),
       supabase.rpc("get_pj_tasks_for_report", {
         start_iso: startISO,
         end_iso: endISO,
@@ -278,7 +282,11 @@ function AdminView() {
       supabase.from("monthly_closures").select("*").eq("reference_month", month),
     ]);
     setPjs((pjRes.data ?? []) as PJProfile[]);
-    setPayments((payRes.data ?? []) as PaymentRow[]);
+    // Mescla pagamentos de referência + pagos no mês (sem duplicar por id)
+    const merged = new Map<string, PaymentRow>();
+    ((payRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
+    ((paidRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
+    setPayments(Array.from(merged.values()));
     setTasks((taskRes.data ?? []) as TaskRow[]);
     setClosures((closRes.data ?? []) as Closure[]);
     setLoading(false);
@@ -293,18 +301,23 @@ function AdminView() {
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
     const sumValues = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
     const avgPerTask = tasksWithValue.length > 0 ? sumValues / tasksWithValue.length : 0;
-    // Pagamentos manuais (sem task_id vinculado) entram direto no total
-    const manualPayments = pjPayments.filter((p) => !p.task_id);
+    // Pagamentos manuais deste mês (sem task_id) — somam ao total a pagar
+    const manualPayments = pjPayments.filter((p) => !p.task_id && (
+      (p.due_date && p.due_date >= startDate && p.due_date < endDate) ||
+      (!p.due_date && p.created_at >= startISO && p.created_at < endISO)
+    ));
     const manualTotal = manualPayments.reduce((s, p) => s + Number(p.amount), 0);
-    // Total to pay = soma dos valores das tarefas externas + pagamentos manuais
+    // Total a pagar = tarefas externas concluídas no mês + pagamentos manuais do mês
     const totalToPay = sumValues + manualTotal;
-    // Pago = pagamentos com status "paid" (manuais ou vinculados a tarefas)
-    const totalPaid = pjPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
-    // Pendente = total a pagar menos o já pago
+    // Pago no mês = pagamentos com paid_date dentro do mês selecionado
+    const totalPaid = pjPayments
+      .filter((p) => p.status === "paid" && p.paid_date && p.paid_date >= startDate && p.paid_date < endDate)
+      .reduce((s, p) => s + Number(p.amount), 0);
+    // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
     const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
     return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure };
-  }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures]);
+  }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
 
   const grandTotals = useMemo(() => rows.reduce((acc, r) => ({
     pending: acc.pending + r.totalPending,
