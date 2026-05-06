@@ -317,8 +317,7 @@ function AdminView() {
       : 0;
     // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
-    const closure = closures.find((c) => c.pj_user_id === pj.id) ?? null;
-    return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure };
+    return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure: closureForPj };
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
 
   const grandTotals = useMemo(() => rows.reduce((acc, r) => ({
