@@ -266,15 +266,12 @@ function AdminView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [pjRes, payRes, paidRes, taskRes, closRes] = await Promise.all([
+    const [pjRes, payRes, taskRes, closRes] = await Promise.all([
       supabase.from("profiles").select("id,full_name,email,contract_type").eq("contract_type", "pj"),
-      // Pagamentos a pagar (referência do mês): pendentes/pagos cuja referência é deste mês
-      // Critério: due_date no mês OU (sem due_date e criado no mês)
+      // Pagamentos referentes ao mês: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
       ),
-      // Pagamentos efetivamente PAGOS no mês selecionado (paid_date no mês)
-      supabase.from("payments").select("*").eq("status", "paid").gte("paid_date", startDate).lt("paid_date", endDate),
       supabase.rpc("get_pj_tasks_for_report", {
         start_iso: startISO,
         end_iso: endISO,
@@ -282,11 +279,7 @@ function AdminView() {
       supabase.from("monthly_closures").select("*").eq("reference_month", month),
     ]);
     setPjs((pjRes.data ?? []) as PJProfile[]);
-    // Mescla pagamentos de referência + pagos no mês (sem duplicar por id)
-    const merged = new Map<string, PaymentRow>();
-    ((payRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
-    ((paidRes.data ?? []) as PaymentRow[]).forEach((p) => merged.set(p.id, p));
-    setPayments(Array.from(merged.values()));
+    setPayments((payRes.data ?? []) as PaymentRow[]);
     setTasks((taskRes.data ?? []) as TaskRow[]);
     setClosures((closRes.data ?? []) as Closure[]);
     setLoading(false);
@@ -295,8 +288,20 @@ function AdminView() {
   useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo<PJRow[]>(() => pjs.map((pj) => {
-    const pjPayments = payments.filter((p) => p.beneficiary_user_id === pj.id && p.status !== "cancelled");
+    // Apenas pagamentos referentes a este mês: vinculados a tarefas concluídas no mês,
+    // OU manuais (sem task_id) — todos que estão em `payments` já passaram pelo filtro de due/created no mês.
+    // Excluir pagamentos pagos cujo paid_date é anterior ao início do mês selecionado (foram fechados em mês anterior).
     const pjTasks = tasks.filter((t) => t.assignee_id === pj.id);
+    const monthTaskIds = new Set(pjTasks.map((t) => t.id));
+    const pjPayments = payments.filter((p) => {
+      if (p.beneficiary_user_id !== pj.id) return false;
+      if (p.status === "cancelled") return false;
+      // Se foi pago antes do início do mês selecionado, pertence a outro fechamento
+      if (p.status === "paid" && p.paid_date && p.paid_date < startDate) return false;
+      // Se vinculado a uma tarefa que NÃO foi concluída neste mês, ignora (pertence a outro mês)
+      if (p.task_id && !monthTaskIds.has(p.task_id)) return false;
+      return true;
+    });
     const completedTasks = pjTasks.length;
     const tasksWithValue = pjTasks.filter((t) => t.service_value && Number(t.service_value) > 0);
     const sumValues = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
