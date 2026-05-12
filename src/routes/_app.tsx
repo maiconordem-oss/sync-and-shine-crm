@@ -26,9 +26,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL } from "@/lib/labels";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { useSound } from "@/lib/use-sound";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
