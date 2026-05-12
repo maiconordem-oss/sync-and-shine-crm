@@ -15,7 +15,7 @@ function getCtx(): AudioContext {
 }
 
 // Unlock AudioContext on first user interaction (browser autoplay policy)
-function unlockAudio() {
+export function unlockAudio() {
   try {
     const ctx = getCtx();
     if (ctx.state === "suspended") void ctx.resume();
@@ -40,6 +40,30 @@ const SOUNDS: Record<SoundType, { notes: number[]; dur: number; wave: Oscillator
   new_comment:   { notes: [392, 494],      dur: 0.10, wave: "sine",     vol: 0.10 },
   mention:       { notes: [880, 1108],     dur: 0.09, wave: "triangle", vol: 0.14 },
 };
+
+export function playTone(type: SoundType) {
+  try {
+    const ctx = getCtx();
+    const doPlay = () => {
+      const { notes, dur, wave, vol } = SOUNDS[type];
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        osc.type = wave;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * dur);
+        osc.connect(gain);
+        osc.start(ctx.currentTime + i * dur);
+        osc.stop(ctx.currentTime + i * dur + dur + 0.05);
+      });
+      const total = dur * notes.length;
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + total + 0.08);
+    };
+    if (ctx.state === "suspended") ctx.resume().then(doPlay).catch(() => {});
+    else doPlay();
+  } catch { /* ignore */ }
+}
 
 export function useSound() {
   const { soundEnabled } = useAuth();
