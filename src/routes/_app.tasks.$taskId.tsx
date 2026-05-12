@@ -141,6 +141,7 @@ function TaskDetailPage() {
     setTask(updated);
     if (user) {
       if (patch.status && patch.status !== previousStatus) {
+        playSound(patch.status === "done" ? "task_complete" : "status_change");
         void runAutomations({
           trigger: "status_changed",
           task: updated as unknown as Record<string, unknown>,
