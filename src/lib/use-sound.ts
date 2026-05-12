@@ -19,12 +19,18 @@ function unlockAudio() {
   try {
     const ctx = getCtx();
     if (ctx.state === "suspended") void ctx.resume();
+    // Play a silent buffer to fully unlock on iOS/Safari
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
   } catch { /* ignore */ }
 }
 
 if (typeof window !== "undefined") {
   ["click", "keydown", "touchstart", "pointerdown"].forEach((evt) =>
-    window.addEventListener(evt, unlockAudio, { once: false, passive: true })
+    window.addEventListener(evt, unlockAudio, { capture: true, passive: true })
   );
 }
 
