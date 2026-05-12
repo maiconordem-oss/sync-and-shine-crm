@@ -113,7 +113,7 @@ function AppLayout() {
         setUnread((n) => n + 1);
         const row = payload.new as { type?: string; title?: string; body?: string; task_id?: string | null };
         const t = row?.type ?? "";
-        playSound(t === "mention" ? "mention" : t === "comment_added" ? "new_comment" : "status_change");
+        playSound(t === "mentioned" || t === "overdue" || t === "due_soon" ? "mention" : t === "comment" ? "new_comment" : "status_change");
         toast(row?.title ?? "Nova notificação", {
           description: row?.body ?? undefined,
           action: row?.task_id
