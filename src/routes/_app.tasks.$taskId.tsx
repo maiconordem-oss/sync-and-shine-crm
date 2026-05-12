@@ -26,6 +26,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useSound } from "@/lib/use-sound";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
 import { initials, formatDate, formatDateTime } from "@/lib/format";
@@ -73,6 +74,7 @@ function TaskDetailPage() {
   const navigate = useNavigate();
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
   const { user, profile, isAdmin, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
+  const { play: playSound } = useSound();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [taskMissing, setTaskMissing] = useState(false);
@@ -139,6 +141,7 @@ function TaskDetailPage() {
     setTask(updated);
     if (user) {
       if (patch.status && patch.status !== previousStatus) {
+        playSound(patch.status === "done" ? "task_complete" : "status_change");
         void runAutomations({
           trigger: "status_changed",
           task: updated as unknown as Record<string, unknown>,

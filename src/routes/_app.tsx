@@ -26,9 +26,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL } from "@/lib/labels";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { useSound } from "@/lib/use-sound";
+import { toast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
@@ -81,6 +83,10 @@ function AppLayout() {
   const location = useLocation();
   const [unread, setUnread] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { play: playSound } = useSound();
+  const notifiedOverdueRef = useRef<Set<string>>(new Set());
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   // Initial unread count
   useEffect(() => {
@@ -103,8 +109,17 @@ function AppLayout() {
         schema: "public",
         table: "notifications",
         filter: `user_id=eq.${user.id}`,
-      }, () => {
+      }, (payload) => {
         setUnread((n) => n + 1);
+        const row = payload.new as { type?: string; title?: string; body?: string; task_id?: string | null };
+        const t = row?.type ?? "";
+        playSound(t === "mentioned" || t === "overdue" || t === "due_soon" ? "mention" : t === "comment" ? "new_comment" : "status_change");
+        toast(row?.title ?? "Nova notificação", {
+          description: row?.body ?? undefined,
+          action: row?.task_id
+            ? { label: "Abrir", onClick: () => navigateRef.current({ to: "/tasks/$taskId", params: { taskId: row.task_id! } }) }
+            : { label: "Ver", onClick: () => navigateRef.current({ to: "/notifications" }) },
+        });
       })
       .on("postgres_changes", {
         event: "UPDATE",
@@ -121,7 +136,44 @@ function AppLayout() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, playSound]);
+
+  // Lembretes de tarefas em atraso (verifica a cada 5 min)
+  useEffect(() => {
+    if (!user) return;
+    const checkOverdue = async () => {
+      const nowIso = new Date().toISOString();
+      const { data } = await supabase
+        .from("tasks")
+        .select("id,title,due_date")
+        .eq("assignee_id", user.id)
+        .neq("status", "done")
+        .not("due_date", "is", null)
+        .lt("due_date", nowIso)
+        .limit(50);
+      const overdue = (data ?? []) as { id: string; title: string; due_date: string }[];
+      const seen = notifiedOverdueRef.current;
+      const fresh = overdue.filter((t) => !seen.has(t.id));
+      if (fresh.length === 0) return;
+      fresh.forEach((t) => seen.add(t.id));
+      playSound("mention");
+      if (fresh.length === 1) {
+        const t = fresh[0];
+        toast.warning("Tarefa em atraso", {
+          description: t.title,
+          action: { label: "Abrir", onClick: () => navigateRef.current({ to: "/tasks/$taskId", params: { taskId: t.id } }) },
+        });
+      } else {
+        toast.warning(`${fresh.length} tarefas em atraso`, {
+          description: "Você tem prazos vencidos pendentes.",
+          action: { label: "Ver tarefas", onClick: () => navigateRef.current({ to: "/tasks" }) },
+        });
+      }
+    };
+    void checkOverdue();
+    const id = window.setInterval(() => void checkOverdue(), 5 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [user, playSound]);
 
   // Ctrl+K global shortcut
   useEffect(() => {
