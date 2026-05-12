@@ -15,7 +15,7 @@ function getCtx(): AudioContext {
 }
 
 // Unlock AudioContext on first user interaction (browser autoplay policy)
-function unlockAudio() {
+export function unlockAudio() {
   try {
     const ctx = getCtx();
     if (ctx.state === "suspended") void ctx.resume();
