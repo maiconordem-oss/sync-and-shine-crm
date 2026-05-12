@@ -136,7 +136,44 @@ function AppLayout() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, playSound]);
+
+  // Lembretes de tarefas em atraso (verifica a cada 5 min)
+  useEffect(() => {
+    if (!user) return;
+    const checkOverdue = async () => {
+      const nowIso = new Date().toISOString();
+      const { data } = await supabase
+        .from("tasks")
+        .select("id,title,due_date")
+        .eq("assignee_id", user.id)
+        .neq("status", "done")
+        .not("due_date", "is", null)
+        .lt("due_date", nowIso)
+        .limit(50);
+      const overdue = (data ?? []) as { id: string; title: string; due_date: string }[];
+      const seen = notifiedOverdueRef.current;
+      const fresh = overdue.filter((t) => !seen.has(t.id));
+      if (fresh.length === 0) return;
+      fresh.forEach((t) => seen.add(t.id));
+      playSound("mention");
+      if (fresh.length === 1) {
+        const t = fresh[0];
+        toast.warning("Tarefa em atraso", {
+          description: t.title,
+          action: { label: "Abrir", onClick: () => navigateRef.current({ to: "/tasks/$taskId", params: { taskId: t.id } }) },
+        });
+      } else {
+        toast.warning(`${fresh.length} tarefas em atraso`, {
+          description: "Você tem prazos vencidos pendentes.",
+          action: { label: "Ver tarefas", onClick: () => navigateRef.current({ to: "/tasks" }) },
+        });
+      }
+    };
+    void checkOverdue();
+    const id = window.setInterval(() => void checkOverdue(), 5 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [user, playSound]);
 
   // Ctrl+K global shortcut
   useEffect(() => {
