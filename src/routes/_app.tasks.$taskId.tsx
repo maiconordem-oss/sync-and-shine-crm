@@ -26,6 +26,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useSound } from "@/lib/use-sound";
 import { runAutomations } from "@/lib/automations";
 import { toast } from "sonner";
 import { initials, formatDate, formatDateTime } from "@/lib/format";
