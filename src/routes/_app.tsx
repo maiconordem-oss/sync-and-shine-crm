@@ -366,16 +366,17 @@ function AppSidebar({
 
 function SoundToggleBtn() {
   const { soundEnabled, setSoundEnabled } = useAuth();
-  const { play } = useSound();
   return (
     <Button
       variant="ghost"
       size="icon"
       className="rounded-md"
       onClick={() => {
+        // Unlock + play synchronously inside the user gesture (browser autoplay policy)
+        unlockAudio();
         const next = !soundEnabled;
+        if (next) playTone("task_complete");
         void setSoundEnabled(next);
-        if (next) setTimeout(() => play("task_complete"), 50);
       }}
       title={soundEnabled ? "Silenciar sons" : "Ativar sons"}
     >
