@@ -29,7 +29,7 @@ import { ROLE_LABEL } from "@/lib/labels";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
-import { useSound } from "@/lib/use-sound";
+import { useSound, unlockAudio } from "@/lib/use-sound";
 import { toast } from "sonner";
 import {
   Sidebar,
