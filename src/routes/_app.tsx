@@ -109,8 +109,17 @@ function AppLayout() {
         schema: "public",
         table: "notifications",
         filter: `user_id=eq.${user.id}`,
-      }, () => {
+      }, (payload) => {
         setUnread((n) => n + 1);
+        const row = payload.new as { type?: string; title?: string; body?: string; task_id?: string | null };
+        const t = row?.type ?? "";
+        playSound(t === "mention" ? "mention" : t === "comment_added" ? "new_comment" : "status_change");
+        toast(row?.title ?? "Nova notificação", {
+          description: row?.body ?? undefined,
+          action: row?.task_id
+            ? { label: "Abrir", onClick: () => navigateRef.current({ to: "/tasks/$taskId", params: { taskId: row.task_id! } }) }
+            : { label: "Ver", onClick: () => navigateRef.current({ to: "/notifications" }) },
+        });
       })
       .on("postgres_changes", {
         event: "UPDATE",
