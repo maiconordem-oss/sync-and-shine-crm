@@ -366,12 +366,17 @@ function AppSidebar({
 
 function SoundToggleBtn() {
   const { soundEnabled, setSoundEnabled } = useAuth();
+  const { play } = useSound();
   return (
     <Button
       variant="ghost"
       size="icon"
       className="rounded-md"
-      onClick={() => void setSoundEnabled(!soundEnabled)}
+      onClick={() => {
+        const next = !soundEnabled;
+        void setSoundEnabled(next);
+        if (next) setTimeout(() => play("task_complete"), 50);
+      }}
       title={soundEnabled ? "Silenciar sons" : "Ativar sons"}
     >
       {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
