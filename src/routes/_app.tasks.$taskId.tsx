@@ -74,6 +74,7 @@ function TaskDetailPage() {
   const navigate = useNavigate();
   const { taskId } = useParams({ from: "/_app/tasks/$taskId" });
   const { user, profile, isAdmin, isManagerOrAdmin, loading, isAuthenticated } = useAuth();
+  const { play: playSound } = useSound();
   const [task, setTask] = useState<TaskFull | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
   const [taskMissing, setTaskMissing] = useState(false);
