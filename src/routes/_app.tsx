@@ -83,6 +83,10 @@ function AppLayout() {
   const location = useLocation();
   const [unread, setUnread] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { play: playSound } = useSound();
+  const notifiedOverdueRef = useRef<Set<string>>(new Set());
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
   // Initial unread count
   useEffect(() => {
