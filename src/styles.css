@@ -142,3 +142,21 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes nudge-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-8px, -6px) rotate(-1deg); }
+  20% { transform: translate(8px, 4px) rotate(1deg); }
+  30% { transform: translate(-7px, 5px) rotate(-1deg); }
+  40% { transform: translate(7px, -5px) rotate(1deg); }
+  50% { transform: translate(-5px, 3px) rotate(-0.5deg); }
+  60% { transform: translate(5px, -3px) rotate(0.5deg); }
+  70% { transform: translate(-3px, 2px); }
+  80% { transform: translate(3px, -2px); }
+  90% { transform: translate(-1px, 1px); }
+}
+
+.nudge-shake {
+  animation: nudge-shake 0.8s cubic-bezier(.36,.07,.19,.97) both;
+}
+

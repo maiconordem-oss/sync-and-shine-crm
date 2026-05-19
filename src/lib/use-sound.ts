@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 
-export type SoundType = "status_change" | "task_complete" | "new_comment" | "mention";
+export type SoundType = "status_change" | "task_complete" | "new_comment" | "mention" | "dm_received" | "dm_sent" | "nudge" | "contact_online";
 
 // Singleton AudioContext shared across the app
 let sharedCtx: AudioContext | null = null;
@@ -39,6 +39,10 @@ const SOUNDS: Record<SoundType, { notes: number[]; dur: number; wave: Oscillator
   task_complete: { notes: [523, 659, 784], dur: 0.10, wave: "sine",     vol: 0.18 },
   new_comment:   { notes: [392, 494],      dur: 0.10, wave: "sine",     vol: 0.10 },
   mention:       { notes: [880, 1108],     dur: 0.09, wave: "triangle", vol: 0.14 },
+  dm_received:   { notes: [659, 880],      dur: 0.09, wave: "sine",     vol: 0.16 },
+  dm_sent:       { notes: [880, 659],      dur: 0.06, wave: "sine",     vol: 0.08 },
+  nudge:         { notes: [220, 330, 220, 330, 220, 330, 220], dur: 0.08, wave: "square", vol: 0.22 },
+  contact_online:{ notes: [523, 784],      dur: 0.10, wave: "triangle", vol: 0.10 },
 };
 
 export function playTone(type: SoundType) {
