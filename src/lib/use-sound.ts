@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 
-export type SoundType = "status_change" | "task_complete" | "new_comment" | "mention";
+export type SoundType = "status_change" | "task_complete" | "new_comment" | "mention" | "dm_received" | "dm_sent" | "nudge" | "contact_online";
 
 // Singleton AudioContext shared across the app
 let sharedCtx: AudioContext | null = null;
