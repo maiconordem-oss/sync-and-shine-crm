@@ -1,74 +1,73 @@
+# Chat estilo MSN
 
-# CRM de Tarefas + Automações de Fluxo
+Transformar o chat atual (sala única) num messenger com conversas individuais, status online, sons e o clássico "chamar atenção" que treme a tela.
 
-Adiciono ao plano anterior um **motor de automações** que dispara ações quando eventos acontecem (ex.: tarefa concluída → cria nova tarefa para outro responsável, ou insere registro em pagamentos).
+## O que muda na experiência
 
-## Novo módulo: Automações
+- **Lista de contatos** à esquerda (igual MSN): todos os membros da equipe, com bolinha de status (online/ausente/offline), última mensagem e contador de não lidas.
+- **Conversa individual** à direita ao clicar num contato. O chat global atual vira a aba "Sala geral" no topo da lista.
+- **Status de presença**: online (ativo agora), ausente (5 min sem interagir), offline. Atualiza em tempo real.
+- **"Está digitando…"** aparece embaixo da conversa quando o outro está escrevendo.
+- **Chamar atenção (nudge)**: botão de sino na conversa. Ao clicar:
+  - Toca um som forte (estilo "nudge" do MSN).
+  - A janela do destinatário treme por ~1s (shake na tela inteira).
+  - Aparece uma mensagem no chat tipo "Fulano chamou sua atenção".
+  - Toast notificando.
+  - Limite: 1 nudge a cada 10s para não virar spam.
+- **Sons**:
+  - Mensagem recebida → som suave de "ding".
+  - Sua mensagem enviada → som curtinho de "swoosh".
+  - Nudge recebido → som alto + tremida.
+  - Contato ficou online → som discreto (opcional, ligado por padrão).
+  - Todos respeitam o botão de volume já existente no header.
+- **Notificações não lidas**: badge no menu lateral do app (no item "Chat") com total de mensagens não lidas em todas as conversas.
+- **Notificação de navegador** opcional quando a aba não está ativa.
 
-### Conceito
-Cada automação tem três partes:
-- **Gatilho (When)**: o que aconteceu.
-- **Condições (If)**: filtros opcionais.
-- **Ações (Then)**: o que executar (uma ou várias em sequência).
+## Layout
 
-### Gatilhos suportados
-- Tarefa criada
-- Tarefa concluída
-- Status alterado (de X para Y)
-- Responsável alterado
-- Prazo vencido
-- Comentário adicionado
-- Tarefa movida para projeto X
+```text
+┌──────────────────────────────────────────────────────┐
+│  Chat                                                │
+├──────────────┬───────────────────────────────────────┤
+│ # Sala geral │  João Silva           🟢 online       │
+│              │  ─────────────────────────────────    │
+│ 🟢 João   2  │                                       │
+│ 🟡 Maria     │  oi, tudo bem?              10:32     │
+│ ⚫ Pedro     │                                       │
+│ 🟢 Ana    1  │              tudo, e você?  10:33     │
+│              │                                       │
+│              │  está digitando…                      │
+│              │  ─────────────────────────────────    │
+│              │  [😀] [📎] mensagem...    [🔔] [➤]   │
+└──────────────┴───────────────────────────────────────┘
+```
 
-### Condições (filtros)
-- Projeto = X
-- Prioridade = alta/urgente
-- Tag contém X
-- Responsável = usuário X
-- Campo personalizado = valor
+## Detalhes técnicos
 
-### Ações suportadas
-- **Criar nova tarefa** (com título/descrição template, responsável, prazo relativo "+3 dias", projeto, prioridade)
-- **Atribuir a outro usuário**
-- **Mudar status** da tarefa atual ou pai
-- **Adicionar comentário automático**
-- **Notificar usuário** (in-app)
-- **Inserir registro em Pagamentos** (valor, descrição, beneficiário, status pendente, vínculo com a tarefa)
-- **Webhook HTTP** (POST para URL externa com payload da tarefa) — para integrações futuras
-- **Adicionar tag**
+**Banco (nova migração):**
+- `direct_messages` (sender_id, recipient_id, content, created_at, read_at, kind: 'text' | 'nudge').
+- `user_presence` (user_id PK, status: 'online'|'away'|'offline', last_seen_at).
+- Índice em `(sender_id, recipient_id, created_at)` para histórico rápido.
+- RLS: só vê mensagens onde for sender ou recipient; só envia como si mesmo.
+- Realtime habilitado em `direct_messages` e `user_presence`.
 
-### Tabela de Pagamentos (novo)
-Como há ação "inserir pagamento", crio módulo simples:
-- Campos: descrição, valor, moeda (BRL), beneficiário (usuário ou texto livre), status (pendente/pago/cancelado), data prevista, data pagamento, tarefa_origem (FK opcional), projeto (FK opcional), criado_por, anexo comprovante.
-- Página **Pagamentos** na sidebar com lista/filtros (status, período, beneficiário) e totais.
-- Permissões: Admin/Gestor gerenciam; Membro vê apenas os próprios.
+**Frontend (`src/routes/_app.chat.tsx`):**
+- Reescrever com layout em 2 colunas. Sala geral preservada (usa `chat_messages` atual).
+- Hook `usePresence`: faz upsert `online` ao montar, `away` após 5 min sem atividade, `offline` no `beforeunload`. Heartbeat a cada 30s.
+- "Digitando": canal Supabase Realtime broadcast (efêmero, sem gravar no DB), debounce 2s.
+- Nudge: insere mensagem `kind='nudge'`. Receptor escuta INSERT, toca som, aplica classe `animate-shake` no `<body>` por 1s.
+- Sons novos em `src/lib/use-sound.ts`: `dm_received`, `dm_sent`, `nudge`, `contact_online`.
+- Keyframe `shake` em `src/styles.css` (translate X/Y rápido).
 
-## UI das Automações
-- Página **Automações** (sidebar, somente Admin/Gestor).
-- Lista de automações com toggle ativar/desativar, contador de execuções, último disparo.
-- Editor visual em 3 passos (Gatilho → Condições → Ações), com pré-visualização em linguagem natural:  
-  *"Quando uma tarefa for concluída no projeto Vendas com tag 'fechamento', criar tarefa 'Emitir NF' para Financeiro com prazo +2 dias e inserir pagamento de R$ X em Pagamentos."*
-- **Templates prontos**: "Tarefa concluída → próxima etapa", "Venda fechada → registrar pagamento", "Prazo vencido → notificar gestor".
-- Aba **Histórico de execuções** por automação (sucesso/erro, payload, timestamp).
+**Menu lateral (`src/routes/_app.tsx`):** badge com contador de DMs não lidas (count de `direct_messages` onde `recipient_id = me AND read_at IS NULL`).
 
-## Variáveis de template
-Em títulos/descrições de ações, suporte a placeholders:
-`{{tarefa.titulo}}`, `{{tarefa.responsavel}}`, `{{tarefa.projeto}}`, `{{tarefa.prazo}}`, `{{usuario.nome}}`, `{{data.hoje}}`, `{{data.hoje+3d}}`.
+**Permissões:** todos os membros podem conversar com todos. Sem restrição por papel (admin pode apagar mensagens dele igual hoje).
 
-## Como o motor roda (técnico)
-- Tabelas: `automations`, `automation_runs` (log).
-- Engine implementado em **server functions** do TanStack Start, chamado a partir de hooks de mutação (criar/atualizar tarefa, comentar) — execução síncrona logo após a ação do usuário.
-- Cada execução é registrada em `automation_runs` com status e payload, garantindo rastreabilidade.
-- Proteção contra loop: limite de profundidade de encadeamento (máx. 5 ações em cascata por evento original).
-- Erros não bloqueiam a ação do usuário; ficam registrados no histórico.
+## Fora de escopo (posso fazer depois se quiser)
 
-## Atualizações no plano original
-- Sidebar ganha itens **Pagamentos** e **Automações**.
-- Dashboard ganha card "Pagamentos pendentes" e "Automações executadas (7d)".
-- Permissões: criar/editar automações = Admin/Gestor; ver histórico = mesmos papéis.
+- Envio de arquivos/imagens na DM.
+- Emojis animados / "winks" do MSN.
+- Chamadas de voz/vídeo.
+- Histórico exportável.
 
-## Resumo do que muda
-- Novo módulo Automações (engine + UI + templates + histórico).
-- Novo módulo Pagamentos (tabela, página, permissões).
-- Integração entre os dois via ação "Inserir pagamento".
-- Tudo o mais do plano anterior permanece.
+Confirma que é isso que você quer? Se sim, eu já mando a migração e implemento.
