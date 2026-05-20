@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { useSound, unlockAudio, playTone } from "@/lib/use-sound";
+import { useGlobalPresence, useGlobalDMListener, requestNotificationPermission, type PresenceStatus } from "@/lib/use-chat-global";
 import { toast } from "sonner";
 import {
   Sidebar,
