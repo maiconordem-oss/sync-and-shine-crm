@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { useSound, unlockAudio, playTone } from "@/lib/use-sound";
+import { useGlobalPresence, useGlobalDMListener, requestNotificationPermission, type PresenceStatus } from "@/lib/use-chat-global";
 import { toast } from "sonner";
 import {
   Sidebar,
@@ -87,6 +88,13 @@ function AppLayout() {
   const notifiedOverdueRef = useRef<Set<string>>(new Set());
   const navigateRef = useRef(navigate);
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+
+  // Presença global (online/ausente/offline em qualquer página)
+  const ownPresence = useGlobalPresence();
+  // Listener global de DMs: badge, som, tremida, piscar título, notificação
+  const unreadDMs = useGlobalDMListener((peerId) => {
+    navigateRef.current({ to: "/chat", search: { with: peerId } });
+  });
 
   // Initial unread count
   useEffect(() => {
@@ -218,6 +226,8 @@ function AppLayout() {
           pathname={location.pathname}
           profileName={profile?.full_name ?? "Usuário"}
           displayRole={displayRole}
+          ownPresence={ownPresence}
+          unreadDMs={unreadDMs}
           onSignOut={async () => {
             await signOut();
             navigate({ to: "/auth" });
@@ -277,16 +287,24 @@ function AppSidebar({
   pathname,
   profileName,
   displayRole,
+  ownPresence,
+  unreadDMs,
   onSignOut,
 }: {
   visibleNav: NavItem[];
   pathname: string;
   profileName: string;
   displayRole: string;
+  ownPresence: PresenceStatus;
+  unreadDMs: number;
   onSignOut: () => Promise<void>;
 }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+
+  const presenceColor =
+    ownPresence === "online" ? "bg-emerald-500" :
+    ownPresence === "away" ? "bg-amber-400" : "bg-muted-foreground/50";
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -318,12 +336,23 @@ function AppSidebar({
               {visibleNav.map((n) => {
                 const active = pathname.startsWith(n.to);
                 const Icon = n.icon;
+                const isChat = n.to === "/chat";
                 return (
                   <SidebarMenuItem key={n.to}>
                     <SidebarMenuButton asChild isActive={active} tooltip={n.label} className="h-10 rounded-md px-3">
                       <Link to={n.to}>
-                        <Icon className="h-4 w-4" />
+                        <span className="relative inline-flex">
+                          <Icon className="h-4 w-4" />
+                          {isChat && (
+                            <span className={cn("absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-sidebar", presenceColor)} />
+                          )}
+                        </span>
                         <span>{n.label}</span>
+                        {isChat && unreadDMs > 0 && (
+                          <span className="ml-auto h-5 min-w-5 rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground flex items-center justify-center">
+                            {unreadDMs > 99 ? "99+" : unreadDMs}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -375,7 +404,10 @@ function SoundToggleBtn() {
         // Unlock + play synchronously inside the user gesture (browser autoplay policy)
         unlockAudio();
         const next = !soundEnabled;
-        if (next) playTone("task_complete");
+        if (next) {
+          playTone("task_complete");
+          requestNotificationPermission();
+        }
         void setSoundEnabled(next);
       }}
       title={soundEnabled ? "Silenciar sons" : "Ativar sons"}
