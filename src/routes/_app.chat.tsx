@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,12 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDateTime } from "@/lib/format";
 import { useSound } from "@/lib/use-sound";
-import { Send, MessageSquare, Trash2, AtSign, Bell, Hash, Zap, Search } from "lucide-react";
+import { Send, MessageSquare, Trash2, AtSign, Bell, Hash, Zap, Search, Paperclip, Image as ImageIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { AudioRecorder } from "@/components/chat/audio-recorder";
+import { MessageAttachment, type AttachmentMeta } from "@/components/chat/message-attachment";
+
+const chatSearchSchema = z.object({
+  with: z.string().uuid().optional(),
+});
 
 export const Route = createFileRoute("/_app/chat")({
+  validateSearch: chatSearchSchema,
   component: ChatPage,
 });
 
@@ -28,9 +36,14 @@ interface DirectMessage {
   sender_id: string;
   recipient_id: string;
   content: string;
-  kind: "text" | "nudge";
+  kind: "text" | "nudge" | "attachment";
   created_at: string;
   read_at: string | null;
+  attachment_url: string | null;
+  attachment_type: "image" | "audio" | "video" | "file" | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  attachment_mime: string | null;
 }
 interface ProfileLite {
   id: string;
@@ -47,22 +60,30 @@ type ActiveConv = { kind: "room" } | { kind: "dm"; userId: string };
 
 function ChatPage() {
   const { user, isManagerOrAdmin } = useAuth();
+  const search = Route.useSearch();
   const { play } = useSound();
   const [profiles, setProfiles] = useState<ProfileLite[]>([]);
   const [presence, setPresence] = useState<Record<string, PresenceRow>>({});
   const [roomMsgs, setRoomMsgs] = useState<ChatMessage[]>([]);
   const [dms, setDms] = useState<DirectMessage[]>([]);
-  const [active, setActive] = useState<ActiveConv>({ kind: "room" });
+  const [active, setActive] = useState<ActiveConv>(
+    search.with ? { kind: "dm", userId: search.with } : { kind: "room" }
+  );
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("");
   const [typingPeers, setTypingPeers] = useState<Record<string, number>>({});
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const nudgeCooldownRef = useRef<number>(0);
-  const lastNudgeReceivedRef = useRef<number>(0);
-  const activeRef = useRef(active);
-  useEffect(() => { activeRef.current = active; }, [active]);
+
+  // Reage a mudanças no ?with=
+  useEffect(() => {
+    if (search.with) setActive({ kind: "dm", userId: search.with });
+  }, [search.with]);
 
   // Initial load
   useEffect(() => {
@@ -85,45 +106,6 @@ function ChatPage() {
     })();
   }, [user]);
 
-  // Presence: mark online on mount, heartbeat, away after idle, offline on unload
-  useEffect(() => {
-    if (!user) return;
-    let lastActivity = Date.now();
-    const upsert = async (status: "online" | "away" | "offline") => {
-      await supabase.from("user_presence").upsert({
-        user_id: user.id, status, last_seen_at: new Date().toISOString(),
-      });
-    };
-    void upsert("online");
-    const onActivity = () => { lastActivity = Date.now(); };
-    ["mousemove", "keydown", "click", "touchstart"].forEach((e) =>
-      window.addEventListener(e, onActivity, { passive: true })
-    );
-    const heartbeat = window.setInterval(() => {
-      const idle = Date.now() - lastActivity;
-      void upsert(idle > 5 * 60 * 1000 ? "away" : "online");
-    }, 30_000);
-    const onUnload = () => {
-      // best-effort sync via fetch keepalive
-      try {
-        navigator.sendBeacon?.(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_presence?on_conflict=user_id`,
-          new Blob([JSON.stringify({ user_id: user.id, status: "offline", last_seen_at: new Date().toISOString() })],
-            { type: "application/json" })
-        );
-      } catch { /* ignore */ }
-    };
-    window.addEventListener("beforeunload", onUnload);
-    return () => {
-      window.clearInterval(heartbeat);
-      window.removeEventListener("beforeunload", onUnload);
-      ["mousemove", "keydown", "click", "touchstart"].forEach((e) =>
-        window.removeEventListener(e, onActivity)
-      );
-      void upsert("offline");
-    };
-  }, [user]);
-
   // Realtime: room messages
   useEffect(() => {
     const channel = supabase
@@ -138,40 +120,15 @@ function ChatPage() {
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
-  // Realtime: DMs + presence
+  // Realtime: DMs locais (apenas estado da página; sons/toasts/tremida são globais)
   useEffect(() => {
     if (!user) return;
     const channel = supabase
-      .channel("dm_presence_rt_" + user.id)
+      .channel("dm_local_rt_" + user.id)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (payload) => {
         const m = payload.new as DirectMessage;
         if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
-        setDms((prev) => [...prev, m]);
-        // Incoming
-        if (m.recipient_id === user.id) {
-          const sender = profilesRef.current.find((p) => p.id === m.sender_id);
-          const senderName = sender?.full_name ?? "Alguém";
-          if (m.kind === "nudge") {
-            const now = Date.now();
-            if (now - lastNudgeReceivedRef.current > 2000) {
-              lastNudgeReceivedRef.current = now;
-              play("nudge");
-              document.body.classList.add("nudge-shake");
-              window.setTimeout(() => document.body.classList.remove("nudge-shake"), 850);
-              toast.warning(`${senderName} chamou sua atenção!`, { duration: 4000 });
-            }
-          } else {
-            play("dm_received");
-            const a = activeRef.current;
-            const isOpen = a.kind === "dm" && a.userId === m.sender_id;
-            if (!isOpen) {
-              toast(senderName, {
-                description: m.content.slice(0, 80),
-                action: { label: "Abrir", onClick: () => setActive({ kind: "dm", userId: m.sender_id }) },
-              });
-            }
-          }
-        }
+        setDms((prev) => prev.find((x) => x.id === m.id) ? prev : [...prev, m]);
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "direct_messages" }, (payload) => {
         const m = payload.new as DirectMessage;
@@ -184,14 +141,7 @@ function ChatPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, (payload) => {
         const row = (payload.new ?? payload.old) as PresenceRow;
         if (!row) return;
-        setPresence((prev) => {
-          const was = prev[row.user_id]?.status;
-          const next = { ...prev, [row.user_id]: row };
-          if (row.user_id !== user.id && was !== "online" && row.status === "online") {
-            play("contact_online");
-          }
-          return next;
-        });
+        setPresence((prev) => ({ ...prev, [row.user_id]: row }));
       })
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         const p = payload as { from: string; to: string };
@@ -200,12 +150,7 @@ function ChatPage() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  // Keep a ref of profiles for use in subscription
-  const profilesRef = useRef<ProfileLite[]>([]);
-  useEffect(() => { profilesRef.current = profiles; }, [profiles]);
 
   // Clean stale typing indicators
   useEffect(() => {
@@ -224,7 +169,6 @@ function ChatPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  // Auto-scroll
   const visibleMsgs = useMemo(() => {
     if (active.kind === "room") return { kind: "room" as const, msgs: roomMsgs };
     const peer = active.userId;
@@ -239,7 +183,7 @@ function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleMsgs]);
 
-  // Mark DMs as read when conversation opens
+  // Marca DMs como lidas ao abrir conversa
   useEffect(() => {
     if (!user || active.kind !== "dm") return;
     const peer = active.userId;
@@ -251,7 +195,6 @@ function ChatPage() {
 
   const profileById = (id: string) => profiles.find((p) => p.id === id);
 
-  // Unread counts per peer
   const unreadByPeer = useMemo(() => {
     const map: Record<string, number> = {};
     if (!user) return map;
@@ -263,7 +206,6 @@ function ChatPage() {
     return map;
   }, [dms, user]);
 
-  // Last message preview per peer
   const lastByPeer = useMemo(() => {
     const map: Record<string, DirectMessage> = {};
     if (!user) return map;
@@ -278,7 +220,7 @@ function ChatPage() {
   const contacts = useMemo(() => {
     const list = profiles
       .filter((p) => p.id !== user?.id)
-      .filter((p) => !search || (p.full_name ?? "").toLowerCase().includes(search.toLowerCase()));
+      .filter((p) => !filter || (p.full_name ?? "").toLowerCase().includes(filter.toLowerCase()));
     return list.sort((a, b) => {
       const sa = presence[a.id]?.status ?? "offline";
       const sb = presence[b.id]?.status ?? "offline";
@@ -289,7 +231,7 @@ function ChatPage() {
       if (ub !== 0) return ub;
       return (a.full_name ?? "").localeCompare(b.full_name ?? "");
     });
-  }, [profiles, presence, unreadByPeer, search, user]);
+  }, [profiles, presence, unreadByPeer, filter, user]);
 
   const send = async () => {
     if (!user || !text.trim()) return;
@@ -326,6 +268,58 @@ function ChatPage() {
       document.body.classList.add("nudge-shake");
       window.setTimeout(() => document.body.classList.remove("nudge-shake"), 850);
     }
+  };
+
+  const sendAttachment = async (file: File | Blob, name: string, type: "image" | "audio" | "video" | "file") => {
+    if (!user || active.kind !== "dm") {
+      toast.info("Anexos só podem ser enviados em conversas individuais.");
+      return;
+    }
+    const MAX = 20 * 1024 * 1024;
+    if (file.size > MAX) {
+      toast.error("Arquivo muito grande (máx. 20 MB).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = name.includes(".") ? name.split(".").pop() : (type === "audio" ? "webm" : "bin");
+      const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+      const path = `${user.id}/${active.userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`.replace(/\.+$/, "") + (ext && !safeName.endsWith("." + ext) ? `.${ext}` : "");
+      const mime = (file as File).type || (type === "audio" ? "audio/webm" : "application/octet-stream");
+      const { error: upErr } = await supabase.storage.from("chat-attachments").upload(path, file, {
+        contentType: mime,
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { error } = await supabase.from("direct_messages").insert([{
+        sender_id: user.id,
+        recipient_id: active.userId,
+        content: "",
+        kind: "attachment",
+        attachment_url: path,
+        attachment_type: type,
+        attachment_name: name,
+        attachment_size: file.size,
+        attachment_mime: mime,
+      }]);
+      if (error) throw error;
+      play("dm_sent");
+    } catch (e) {
+      toast.error("Falha ao enviar anexo: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>, asImage: boolean) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    let type: "image" | "audio" | "video" | "file" = "file";
+    if (asImage || f.type.startsWith("image/")) type = "image";
+    else if (f.type.startsWith("audio/")) type = "audio";
+    else if (f.type.startsWith("video/")) type = "video";
+    void sendAttachment(f, f.name, type);
   };
 
   const deleteRoomMsg = async (id: string) => {
@@ -386,8 +380,8 @@ function ChatPage() {
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2 top-2.5 text-muted-foreground" />
             <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
               placeholder="Buscar contato..."
               className="h-8 pl-7 text-xs"
             />
@@ -450,7 +444,11 @@ function ChatPage() {
                     {typing
                       ? <span className="italic text-primary">digitando...</span>
                       : last
-                        ? (last.kind === "nudge" ? "⚡ chamou atenção" : last.content)
+                        ? (last.kind === "nudge"
+                            ? "⚡ chamou atenção"
+                            : last.kind === "attachment"
+                              ? `📎 ${last.attachment_type === "image" ? "imagem" : last.attachment_type === "audio" ? "áudio" : last.attachment_type === "video" ? "vídeo" : "arquivo"}`
+                              : last.content)
                         : statusLabel(st)}
                   </div>
                 </div>
@@ -521,7 +519,58 @@ function ChatPage() {
 
         {/* Input */}
         <div className="border-t p-3 shrink-0">
+          {uploading && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="animate-pulse">Enviando anexo...</span>
+              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setUploading(false)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
           <div className="flex gap-2 items-end">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => handleFilePick(e, false)}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFilePick(e, true)}
+            />
+            {active.kind === "dm" && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  title="Anexar arquivo"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploading}
+                  title="Enviar foto"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <AudioRecorder
+                  disabled={uploading}
+                  onRecorded={(blob, dur) => void sendAttachment(blob, `audio_${Math.round(dur / 1000)}s.webm`, "audio")}
+                />
+              </>
+            )}
             <Textarea
               ref={textRef}
               value={text}
@@ -551,7 +600,10 @@ function ChatPage() {
               <Send className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1">Enter para enviar · Shift+Enter nova linha{active.kind === "dm" && " · 🔔 chama atenção (treme a tela)"}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Enter para enviar · Shift+Enter nova linha
+            {active.kind === "dm" && " · 📎 anexo · 🖼️ foto · 🎤 áudio · 🔔 chama atenção"}
+          </p>
         </div>
       </div>
     </div>
@@ -645,6 +697,16 @@ function DMMessages({
             </div>
           );
         }
+        const attachmentMeta: AttachmentMeta | null =
+          m.kind === "attachment" && m.attachment_url && m.attachment_type
+            ? {
+                url: m.attachment_url,
+                type: m.attachment_type,
+                name: m.attachment_name ?? "anexo",
+                size: m.attachment_size,
+                mime: m.attachment_mime,
+              }
+            : null;
         return (
           <div key={m.id} className={cn("flex gap-2 group", isOwn && "flex-row-reverse", !showHeader && "mt-0.5")}>
             <div className="w-8 shrink-0">
@@ -663,7 +725,14 @@ function DMMessages({
                 </div>
               )}
               <div className={cn("rounded-2xl px-3 py-2 text-sm relative", isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}>
-                <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                {attachmentMeta ? (
+                  <div className="space-y-1">
+                    <MessageAttachment meta={attachmentMeta} />
+                    {m.content && <span className="whitespace-pre-wrap break-words block">{m.content}</span>}
+                  </div>
+                ) : (
+                  <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                )}
                 {isOwn && m.read_at && (
                   <span className="block text-[10px] opacity-70 mt-0.5">✓ lida</span>
                 )}
