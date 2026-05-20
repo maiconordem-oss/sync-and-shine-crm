@@ -287,16 +287,24 @@ function AppSidebar({
   pathname,
   profileName,
   displayRole,
+  ownPresence,
+  unreadDMs,
   onSignOut,
 }: {
   visibleNav: NavItem[];
   pathname: string;
   profileName: string;
   displayRole: string;
+  ownPresence: PresenceStatus;
+  unreadDMs: number;
   onSignOut: () => Promise<void>;
 }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+
+  const presenceColor =
+    ownPresence === "online" ? "bg-emerald-500" :
+    ownPresence === "away" ? "bg-amber-400" : "bg-muted-foreground/50";
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
