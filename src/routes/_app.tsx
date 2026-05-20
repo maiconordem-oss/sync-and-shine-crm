@@ -89,6 +89,13 @@ function AppLayout() {
   const navigateRef = useRef(navigate);
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
 
+  // Presença global (online/ausente/offline em qualquer página)
+  const ownPresence = useGlobalPresence();
+  // Listener global de DMs: badge, som, tremida, piscar título, notificação
+  const unreadDMs = useGlobalDMListener((peerId) => {
+    navigateRef.current({ to: "/chat", search: { with: peerId } });
+  });
+
   // Initial unread count
   useEffect(() => {
     if (!user) return;
