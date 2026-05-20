@@ -404,7 +404,10 @@ function SoundToggleBtn() {
         // Unlock + play synchronously inside the user gesture (browser autoplay policy)
         unlockAudio();
         const next = !soundEnabled;
-        if (next) playTone("task_complete");
+        if (next) {
+          playTone("task_complete");
+          requestNotificationPermission();
+        }
         void setSoundEnabled(next);
       }}
       title={soundEnabled ? "Silenciar sons" : "Ativar sons"}
