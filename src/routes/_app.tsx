@@ -226,6 +226,8 @@ function AppLayout() {
           pathname={location.pathname}
           profileName={profile?.full_name ?? "Usuário"}
           displayRole={displayRole}
+          ownPresence={ownPresence}
+          unreadDMs={unreadDMs}
           onSignOut={async () => {
             await signOut();
             navigate({ to: "/auth" });
