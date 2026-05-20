@@ -336,12 +336,23 @@ function AppSidebar({
               {visibleNav.map((n) => {
                 const active = pathname.startsWith(n.to);
                 const Icon = n.icon;
+                const isChat = n.to === "/chat";
                 return (
                   <SidebarMenuItem key={n.to}>
                     <SidebarMenuButton asChild isActive={active} tooltip={n.label} className="h-10 rounded-md px-3">
                       <Link to={n.to}>
-                        <Icon className="h-4 w-4" />
+                        <span className="relative inline-flex">
+                          <Icon className="h-4 w-4" />
+                          {isChat && (
+                            <span className={cn("absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-sidebar", presenceColor)} />
+                          )}
+                        </span>
                         <span>{n.label}</span>
+                        {isChat && unreadDMs > 0 && (
+                          <span className="ml-auto h-5 min-w-5 rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground flex items-center justify-center">
+                            {unreadDMs > 99 ? "99+" : unreadDMs}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
