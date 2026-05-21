@@ -76,6 +76,7 @@ const NAV: NavItem[] = [
   { to: "/members", label: "Membros", icon: Users, adminOnly: true, permKey: "members.manage" },
   // members.view handled by adminOnly above
   { to: "/permissions", label: "Permissões", icon: ShieldCheck, adminOnly: true },
+  { to: "/scheduled-messages", label: "Mensagens agendadas", icon: CalendarClock, adminOnly: true },
 ];
 
 function AppLayout() {
