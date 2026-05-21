@@ -144,20 +144,31 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          reply_to_id: string | null
         }
         Insert: {
           author_id?: string | null
           content: string
           created_at?: string
           id?: string
+          reply_to_id?: string | null
         }
         Update: {
           author_id?: string | null
           content?: string
           created_at?: string
           id?: string
+          reply_to_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       checklists: {
         Row: {
@@ -235,10 +246,12 @@ export type Database = {
           attachment_url: string | null
           content: string
           created_at: string
+          delivered_at: string | null
           id: string
           kind: string
           read_at: string | null
           recipient_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -249,10 +262,12 @@ export type Database = {
           attachment_url?: string | null
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           kind?: string
           read_at?: string | null
           recipient_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -263,13 +278,23 @@ export type Database = {
           attachment_url?: string | null
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           kind?: string
           read_at?: string | null
           recipient_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "direct_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       monthly_closures: {
         Row: {
