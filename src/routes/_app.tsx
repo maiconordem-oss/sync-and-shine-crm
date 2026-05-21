@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   ShieldCheck,
   CalendarDays,
+  CalendarClock,
   Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
