@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDateTime } from "@/lib/format";
 import { useSound } from "@/lib/use-sound";
-import { Send, MessageSquare, Trash2, AtSign, Bell, Hash, Zap, Search, Paperclip, Image as ImageIcon, X } from "lucide-react";
+import {
+  Send, MessageSquare, Trash2, AtSign, Bell, Hash, Zap, Search, Paperclip,
+  Image as ImageIcon, X, Reply, Check, CheckCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -30,6 +33,7 @@ interface ChatMessage {
   author_id: string;
   content: string;
   created_at: string;
+  reply_to_id: string | null;
 }
 interface DirectMessage {
   id: string;
@@ -39,6 +43,8 @@ interface DirectMessage {
   kind: "text" | "nudge" | "attachment";
   created_at: string;
   read_at: string | null;
+  delivered_at: string | null;
+  reply_to_id: string | null;
   attachment_url: string | null;
   attachment_type: "image" | "audio" | "video" | "file" | null;
   attachment_name: string | null;
@@ -57,6 +63,33 @@ interface PresenceRow {
 }
 
 type ActiveConv = { kind: "room" } | { kind: "dm"; userId: string };
+type ReplyTarget = {
+  id: string;
+  authorName: string;
+  preview: string;
+};
+type PendingPaste = { blob: Blob; previewUrl: string; name: string };
+
+function previewOfMsg(m: { content?: string | null; kind?: string | null; attachment_type?: string | null } | undefined): string {
+  if (!m) return "";
+  if (m.kind === "nudge") return "⚡ chamou atenção";
+  if (m.kind === "attachment") {
+    return `📎 ${
+      m.attachment_type === "image" ? "imagem" :
+      m.attachment_type === "audio" ? "áudio" :
+      m.attachment_type === "video" ? "vídeo" : "arquivo"
+    }`;
+  }
+  return (m.content ?? "").slice(0, 120);
+}
+
+function scrollToMessage(id: string) {
+  const el = document.getElementById("msg-" + id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("ring-2", "ring-primary", "rounded-2xl");
+  window.setTimeout(() => el.classList.remove("ring-2", "ring-primary", "rounded-2xl"), 1500);
+}
 
 function ChatPage() {
   const { user, isManagerOrAdmin } = useAuth();
@@ -74,6 +107,8 @@ function ChatPage() {
   const [filter, setFilter] = useState("");
   const [typingPeers, setTypingPeers] = useState<Record<string, number>>({});
   const [uploading, setUploading] = useState(false);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +119,12 @@ function ChatPage() {
   useEffect(() => {
     if (search.with) setActive({ kind: "dm", userId: search.with });
   }, [search.with]);
+
+  // Reset reply ao trocar conversa
+  useEffect(() => {
+    setReplyTo(null);
+    setPendingPaste((p) => { if (p) URL.revokeObjectURL(p.previewUrl); return null; });
+  }, [active]);
 
   // Initial load
   useEffect(() => {
@@ -183,17 +224,32 @@ function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [visibleMsgs]);
 
-  // Marca DMs como lidas ao abrir conversa
-  useEffect(() => {
+  // Marca DMs como lidas ao abrir conversa (e ao voltar foco)
+  const markRead = useCallback(() => {
     if (!user || active.kind !== "dm") return;
     const peer = active.userId;
     const unread = dms.filter((m) => m.recipient_id === user.id && m.sender_id === peer && !m.read_at);
     if (unread.length === 0) return;
     const ids = unread.map((m) => m.id);
     void supabase.from("direct_messages").update({ read_at: new Date().toISOString() }).in("id", ids);
-  }, [active, dms, user]);
+  }, [user, active, dms]);
 
-  const profileById = (id: string) => profiles.find((p) => p.id === id);
+  useEffect(() => { markRead(); }, [markRead]);
+
+  useEffect(() => {
+    const onFocus = () => { if (!document.hidden) markRead(); };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [markRead]);
+
+  const profileById = useCallback(
+    (id: string) => profiles.find((p) => p.id === id),
+    [profiles],
+  );
 
   const unreadByPeer = useMemo(() => {
     const map: Record<string, number> = {};
@@ -233,22 +289,57 @@ function ChatPage() {
     });
   }, [profiles, presence, unreadByPeer, filter, user]);
 
+  // Indexes for reply lookup
+  const roomById = useMemo(() => {
+    const m = new Map<string, ChatMessage>();
+    roomMsgs.forEach((x) => m.set(x.id, x));
+    return m;
+  }, [roomMsgs]);
+  const dmById = useMemo(() => {
+    const m = new Map<string, DirectMessage>();
+    dms.forEach((x) => m.set(x.id, x));
+    return m;
+  }, [dms]);
+
   const send = async () => {
-    if (!user || !text.trim()) return;
+    if (!user) return;
+    if (!text.trim() && !pendingPaste) return;
     setBusy(true);
-    if (active.kind === "room") {
-      const { error } = await supabase.from("chat_messages").insert([{ author_id: user.id, content: text.trim() }]);
-      if (error) toast.error(error.message);
-    } else {
-      const { error } = await supabase.from("direct_messages").insert([{
-        sender_id: user.id, recipient_id: active.userId, content: text.trim(), kind: "text",
-      }]);
-      if (error) toast.error(error.message);
-      else play("dm_sent");
+    try {
+      // Se há paste pendente, envia como anexo (e usa text como caption se houver)
+      if (pendingPaste && active.kind === "dm") {
+        await sendAttachment(pendingPaste.blob, pendingPaste.name, "image", text.trim() || undefined);
+        URL.revokeObjectURL(pendingPaste.previewUrl);
+        setPendingPaste(null);
+        setText("");
+        setReplyTo(null);
+        return;
+      }
+      if (!text.trim()) return;
+      if (active.kind === "room") {
+        const { error } = await supabase.from("chat_messages").insert([{
+          author_id: user.id,
+          content: text.trim(),
+          reply_to_id: replyTo?.id ?? null,
+        }]);
+        if (error) toast.error(error.message);
+      } else {
+        const { error } = await supabase.from("direct_messages").insert([{
+          sender_id: user.id,
+          recipient_id: active.userId,
+          content: text.trim(),
+          kind: "text",
+          reply_to_id: replyTo?.id ?? null,
+        }]);
+        if (error) toast.error(error.message);
+        else play("dm_sent");
+      }
+      setText("");
+      setReplyTo(null);
+    } finally {
+      setBusy(false);
+      textRef.current?.focus();
     }
-    setBusy(false);
-    setText("");
-    textRef.current?.focus();
   };
 
   const sendNudge = async () => {
@@ -270,7 +361,21 @@ function ChatPage() {
     }
   };
 
-  const sendAttachment = async (file: File | Blob, name: string, type: "image" | "audio" | "video" | "file") => {
+  const extFor = (type: "image" | "audio" | "video" | "file", name: string, mime: string): string => {
+    const fromName = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+    if (fromName && /^[a-z0-9]{2,5}$/.test(fromName)) return fromName;
+    if (type === "audio") return mime.includes("mp4") ? "m4a" : "webm";
+    if (type === "video") return mime.includes("mp4") ? "mp4" : "webm";
+    if (type === "image") return mime.includes("png") ? "png" : "jpg";
+    return "bin";
+  };
+
+  const sendAttachment = async (
+    file: File | Blob,
+    name: string,
+    type: "image" | "audio" | "video" | "file",
+    caption?: string,
+  ) => {
     if (!user || active.kind !== "dm") {
       toast.info("Anexos só podem ser enviados em conversas individuais.");
       return;
@@ -282,10 +387,11 @@ function ChatPage() {
     }
     setUploading(true);
     try {
-      const ext = name.includes(".") ? name.split(".").pop() : (type === "audio" ? "webm" : "bin");
-      const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-      const path = `${user.id}/${active.userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`.replace(/\.+$/, "") + (ext && !safeName.endsWith("." + ext) ? `.${ext}` : "");
       const mime = (file as File).type || (type === "audio" ? "audio/webm" : "application/octet-stream");
+      const ext = extFor(type, name, mime);
+      const stamp = Date.now();
+      const rand = Math.random().toString(36).slice(2, 8);
+      const path = `${user.id}/${active.userId}/${stamp}_${rand}.${ext}`;
       const { error: upErr } = await supabase.storage.from("chat-attachments").upload(path, file, {
         contentType: mime,
         upsert: false,
@@ -294,8 +400,9 @@ function ChatPage() {
       const { error } = await supabase.from("direct_messages").insert([{
         sender_id: user.id,
         recipient_id: active.userId,
-        content: "",
+        content: caption ?? "",
         kind: "attachment",
+        reply_to_id: replyTo?.id ?? null,
         attachment_url: path,
         attachment_type: type,
         attachment_name: name,
@@ -304,6 +411,7 @@ function ChatPage() {
       }]);
       if (error) throw error;
       play("dm_sent");
+      setReplyTo(null);
     } catch (e) {
       toast.error("Falha ao enviar anexo: " + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -354,8 +462,57 @@ function ChatPage() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (active.kind !== "dm") return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === "file" && it.type.startsWith("image/")) {
+        const file = it.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        if (pendingPaste) URL.revokeObjectURL(pendingPaste.previewUrl);
+        const ext = file.type.includes("png") ? "png" : "jpg";
+        const name = `colado_${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
+        setPendingPaste({
+          blob: file,
+          previewUrl: URL.createObjectURL(file),
+          name,
+        });
+        return;
+      }
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+    if (e.key === "Escape") {
+      if (pendingPaste) {
+        URL.revokeObjectURL(pendingPaste.previewUrl);
+        setPendingPaste(null);
+      } else if (replyTo) {
+        setReplyTo(null);
+      }
+    }
+  };
+
+  const startReplyToRoom = (m: ChatMessage) => {
+    const author = profileById(m.author_id);
+    setReplyTo({
+      id: m.id,
+      authorName: m.author_id === user?.id ? "Você" : (author?.full_name ?? "—"),
+      preview: previewOfMsg({ content: m.content, kind: "text" }),
+    });
+    textRef.current?.focus();
+  };
+  const startReplyToDM = (m: DirectMessage, peer: ProfileLite | null) => {
+    setReplyTo({
+      id: m.id,
+      authorName: m.sender_id === user?.id ? "Você" : (peer?.full_name ?? "—"),
+      preview: previewOfMsg(m),
+    });
+    textRef.current?.focus();
   };
 
   const statusDot = (status?: string) => {
@@ -444,11 +601,7 @@ function ChatPage() {
                     {typing
                       ? <span className="italic text-primary">digitando...</span>
                       : last
-                        ? (last.kind === "nudge"
-                            ? "⚡ chamou atenção"
-                            : last.kind === "attachment"
-                              ? `📎 ${last.attachment_type === "image" ? "imagem" : last.attachment_type === "audio" ? "áudio" : last.attachment_type === "video" ? "vídeo" : "arquivo"}`
-                              : last.content)
+                        ? previewOfMsg(last)
                         : statusLabel(st)}
                   </div>
                 </div>
@@ -505,9 +658,24 @@ function ChatPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1 min-h-0">
           {visibleMsgs.kind === "room" ? (
-            <RoomMessages msgs={visibleMsgs.msgs} userId={user?.id} profileById={profileById} isManagerOrAdmin={isManagerOrAdmin} onDelete={(id) => void deleteRoomMsg(id)} />
+            <RoomMessages
+              msgs={visibleMsgs.msgs}
+              userId={user?.id}
+              profileById={profileById}
+              isManagerOrAdmin={isManagerOrAdmin}
+              roomById={roomById}
+              onDelete={(id) => void deleteRoomMsg(id)}
+              onReply={startReplyToRoom}
+            />
           ) : (
-            <DMMessages msgs={visibleMsgs.msgs} userId={user?.id} peer={activePeer ?? null} onDelete={(id) => void deleteDM(id)} />
+            <DMMessages
+              msgs={visibleMsgs.msgs}
+              userId={user?.id}
+              peer={activePeer ?? null}
+              dmById={dmById}
+              onDelete={(id) => void deleteDM(id)}
+              onReply={(m) => startReplyToDM(m, activePeer ?? null)}
+            />
           )}
           {activePeerTyping && (
             <div className="text-xs text-muted-foreground italic pl-12 pt-1 animate-pulse">
@@ -522,11 +690,45 @@ function ChatPage() {
           {uploading && (
             <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="animate-pulse">Enviando anexo...</span>
-              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setUploading(false)}>
+            </div>
+          )}
+
+          {/* Reply preview */}
+          {replyTo && (
+            <div className="mb-2 flex items-start gap-2 rounded-md border-l-4 border-primary bg-muted/60 px-2 py-1.5">
+              <Reply className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-primary truncate">{replyTo.authorName}</div>
+                <div className="text-xs text-muted-foreground truncate">{replyTo.preview}</div>
+              </div>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setReplyTo(null)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
           )}
+
+          {/* Paste preview */}
+          {pendingPaste && (
+            <div className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+              <img src={pendingPaste.previewUrl} alt="" className="h-16 w-16 rounded object-cover" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-medium truncate">Imagem colada</div>
+                <div className="text-[11px] text-muted-foreground">Pressione Enter para enviar</div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  URL.revokeObjectURL(pendingPaste.previewUrl);
+                  setPendingPaste(null);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+
           <div className="flex gap-2 items-end">
             <input
               ref={fileInputRef}
@@ -576,7 +778,14 @@ function ChatPage() {
               value={text}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder={active.kind === "room" ? "Mensagem na sala..." : `Mensagem para ${activePeer?.full_name ?? ""}...`}
+              onPaste={handlePaste}
+              placeholder={
+                pendingPaste
+                  ? "Adicione uma legenda (opcional) e Enter para enviar..."
+                  : active.kind === "room"
+                    ? "Mensagem na sala..."
+                    : `Mensagem para ${activePeer?.full_name ?? ""}... (Ctrl+V cola imagem)`
+              }
               rows={1}
               className="resize-none text-sm min-h-[40px] max-h-[120px] flex-1"
             />
@@ -594,15 +803,15 @@ function ChatPage() {
             <Button
               size="sm"
               onClick={() => void send()}
-              disabled={busy || !text.trim()}
+              disabled={busy || (!text.trim() && !pendingPaste)}
               className="h-10 px-4 shrink-0"
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
-            Enter para enviar · Shift+Enter nova linha
-            {active.kind === "dm" && " · 📎 anexo · 🖼️ foto · 🎤 áudio · 🔔 chama atenção"}
+            Enter envia · Shift+Enter nova linha · Esc cancela resposta/colagem
+            {active.kind === "dm" && " · Ctrl+V cola imagem"}
           </p>
         </div>
       </div>
@@ -610,14 +819,37 @@ function ChatPage() {
   );
 }
 
+function QuotedBlock({
+  authorName, preview, onClick,
+}: { authorName: string; preview: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-1 w-full text-left rounded-md border-l-2 border-current/60 bg-background/40 px-2 py-1 hover:bg-background/60 transition-colors"
+    >
+      <div className="text-[10px] font-semibold opacity-90 truncate">{authorName}</div>
+      <div className="text-[11px] opacity-75 truncate">{preview}</div>
+    </button>
+  );
+}
+
+function StatusIcon({ m }: { m: DirectMessage }) {
+  if (m.read_at) return <CheckCheck className="h-3 w-3 text-sky-300" />;
+  if (m.delivered_at) return <CheckCheck className="h-3 w-3 opacity-70" />;
+  return <Check className="h-3 w-3 opacity-60" />;
+}
+
 function RoomMessages({
-  msgs, userId, profileById, isManagerOrAdmin, onDelete,
+  msgs, userId, profileById, isManagerOrAdmin, roomById, onDelete, onReply,
 }: {
   msgs: ChatMessage[];
   userId: string | undefined;
   profileById: (id: string) => ProfileLite | undefined;
   isManagerOrAdmin: boolean;
+  roomById: Map<string, ChatMessage>;
   onDelete: (id: string) => void;
+  onReply: (m: ChatMessage) => void;
 }) {
   if (msgs.length === 0) {
     return <div className="text-center py-12 text-muted-foreground text-sm">Nenhuma mensagem ainda. Diga olá! 👋</div>;
@@ -629,6 +861,8 @@ function RoomMessages({
         const author = profileById(m.author_id);
         const prev = msgs[idx - 1];
         const showAvatar = !prev || prev.author_id !== m.author_id;
+        const replied = m.reply_to_id ? roomById.get(m.reply_to_id) : undefined;
+        const repliedAuthor = replied ? profileById(replied.author_id) : undefined;
         return (
           <div key={m.id} className={cn("flex gap-2 group", isOwn && "flex-row-reverse", !showAvatar && "mt-0.5")}>
             <div className="w-8 shrink-0">
@@ -645,16 +879,40 @@ function RoomMessages({
                   <span className="text-muted-foreground">{formatDateTime(m.created_at)}</span>
                 </div>
               )}
-              <div className={cn("rounded-2xl px-3 py-2 text-sm relative", isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}>
-                <span className="whitespace-pre-wrap break-words">{m.content}</span>
-                {(isOwn || isManagerOrAdmin) && (
-                  <button
-                    onClick={() => onDelete(m.id)}
-                    className={cn("absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive", isOwn ? "-left-6" : "-right-6")}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+              <div
+                id={"msg-" + m.id}
+                className={cn("rounded-2xl px-3 py-2 text-sm relative transition-all", isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}
+              >
+                {m.reply_to_id && (
+                  replied ? (
+                    <QuotedBlock
+                      authorName={replied.author_id === userId ? "Você" : (repliedAuthor?.full_name ?? "—")}
+                      preview={previewOfMsg({ content: replied.content, kind: "text" })}
+                      onClick={() => scrollToMessage(replied.id)}
+                    />
+                  ) : (
+                    <div className="mb-1 text-[11px] opacity-60 italic">mensagem original removida</div>
+                  )
                 )}
+                <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                <div className={cn("absolute -top-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity", isOwn ? "-left-12" : "-right-12")}>
+                  <button
+                    onClick={() => onReply(m)}
+                    className="rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-primary"
+                    title="Responder"
+                  >
+                    <Reply className="h-3 w-3" />
+                  </button>
+                  {(isOwn || isManagerOrAdmin) && (
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      className="rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -665,12 +923,14 @@ function RoomMessages({
 }
 
 function DMMessages({
-  msgs, userId, peer, onDelete,
+  msgs, userId, peer, dmById, onDelete, onReply,
 }: {
   msgs: DirectMessage[];
   userId: string | undefined;
   peer: ProfileLite | null;
+  dmById: Map<string, DirectMessage>;
   onDelete: (id: string) => void;
+  onReply: (m: DirectMessage) => void;
 }) {
   if (msgs.length === 0) {
     return (
@@ -688,7 +948,7 @@ function DMMessages({
         const showHeader = !prev || prev.sender_id !== m.sender_id || (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000);
         if (m.kind === "nudge") {
           return (
-            <div key={m.id} className="flex items-center justify-center my-3">
+            <div key={m.id} id={"msg-" + m.id} className="flex items-center justify-center my-3">
               <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-full px-3 py-1 text-xs">
                 <Zap className="h-3.5 w-3.5" />
                 <span className="font-medium">{isOwn ? "Você" : (peer?.full_name ?? "—")}</span> chamou atenção!
@@ -707,6 +967,7 @@ function DMMessages({
                 mime: m.attachment_mime,
               }
             : null;
+        const replied = m.reply_to_id ? dmById.get(m.reply_to_id) : undefined;
         return (
           <div key={m.id} className={cn("flex gap-2 group", isOwn && "flex-row-reverse", !showHeader && "mt-0.5")}>
             <div className="w-8 shrink-0">
@@ -724,7 +985,21 @@ function DMMessages({
                   <span className="text-muted-foreground">{formatDateTime(m.created_at)}</span>
                 </div>
               )}
-              <div className={cn("rounded-2xl px-3 py-2 text-sm relative", isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}>
+              <div
+                id={"msg-" + m.id}
+                className={cn("rounded-2xl px-3 py-2 text-sm relative transition-all", isOwn ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm")}
+              >
+                {m.reply_to_id && (
+                  replied ? (
+                    <QuotedBlock
+                      authorName={replied.sender_id === userId ? "Você" : (peer?.full_name ?? "—")}
+                      preview={previewOfMsg(replied)}
+                      onClick={() => scrollToMessage(replied.id)}
+                    />
+                  ) : (
+                    <div className="mb-1 text-[11px] opacity-60 italic">mensagem original removida</div>
+                  )
+                )}
                 {attachmentMeta ? (
                   <div className="space-y-1">
                     <MessageAttachment meta={attachmentMeta} />
@@ -733,17 +1008,32 @@ function DMMessages({
                 ) : (
                   <span className="whitespace-pre-wrap break-words">{m.content}</span>
                 )}
-                {isOwn && m.read_at && (
-                  <span className="block text-[10px] opacity-70 mt-0.5">✓ lida</span>
-                )}
                 {isOwn && (
-                  <button
-                    onClick={() => onDelete(m.id)}
-                    className="absolute -top-1 -left-6 opacity-0 group-hover:opacity-100 transition-opacity rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  <div className="mt-0.5 flex items-center justify-end gap-1 text-[10px] opacity-80">
+                    <StatusIcon m={m} />
+                    <span>
+                      {m.read_at ? "lida" : m.delivered_at ? "entregue" : "enviada"}
+                    </span>
+                  </div>
                 )}
+                <div className={cn("absolute -top-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity", isOwn ? "-left-12" : "-right-12")}>
+                  <button
+                    onClick={() => onReply(m)}
+                    className="rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-primary"
+                    title="Responder"
+                  >
+                    <Reply className="h-3 w-3" />
+                  </button>
+                  {isOwn && (
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      className="rounded-full p-0.5 bg-background border shadow-sm text-muted-foreground hover:text-destructive"
+                      title="Excluir"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
