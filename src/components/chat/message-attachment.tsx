@@ -17,14 +17,29 @@ function humanSize(n?: number | null) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// In-memory cache de signed URLs por path (TTL 50 min; supabase devolve 60 min)
+const URL_TTL_MS = 50 * 60 * 1000;
+const urlCache = new Map<string, { url: string; expires: number }>();
+
+async function getSignedUrl(path: string): Promise<string | null> {
+  const cached = urlCache.get(path);
+  if (cached && cached.expires > Date.now()) return cached.url;
+  const { data } = await supabase.storage
+    .from("chat-attachments")
+    .createSignedUrl(path, 60 * 60);
+  const url = data?.signedUrl ?? null;
+  if (url) urlCache.set(path, { url, expires: Date.now() + URL_TTL_MS });
+  return url;
+}
+
 export function useSignedUrl(path: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(() =>
+    path ? (urlCache.get(path)?.url ?? null) : null,
+  );
   useEffect(() => {
     if (!path) { setUrl(null); return; }
     let cancelled = false;
-    void supabase.storage.from("chat-attachments").createSignedUrl(path, 60 * 60).then(({ data }) => {
-      if (!cancelled) setUrl(data?.signedUrl ?? null);
-    });
+    void getSignedUrl(path).then((u) => { if (!cancelled) setUrl(u); });
     return () => { cancelled = true; };
   }, [path]);
   return url;
@@ -42,10 +57,26 @@ export function MessageAttachment({ meta }: { meta: AttachmentMeta }) {
     );
   }
   if (meta.type === "audio") {
-    return <audio src={signed} controls className="max-w-[260px]" />;
+    return (
+      <audio
+        src={signed}
+        controls
+        preload="metadata"
+        playsInline
+        className="max-w-[260px] block"
+      />
+    );
   }
   if (meta.type === "video") {
-    return <video src={signed} controls className="max-w-[280px] max-h-[280px] rounded-md" />;
+    return (
+      <video
+        src={signed}
+        controls
+        preload="metadata"
+        playsInline
+        className="max-w-[280px] max-h-[280px] rounded-md block"
+      />
+    );
   }
   return (
     <a
