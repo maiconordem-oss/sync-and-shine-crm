@@ -619,6 +619,54 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_messages: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string
+          days_of_week: number[]
+          id: string
+          last_run_at: string | null
+          recurrence: string
+          run_count: number
+          scheduled_at: string
+          status: string
+          target_kind: string
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by: string
+          days_of_week?: number[]
+          id?: string
+          last_run_at?: string | null
+          recurrence?: string
+          run_count?: number
+          scheduled_at: string
+          status?: string
+          target_kind: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string
+          days_of_week?: number[]
+          id?: string
+          last_run_at?: string | null
+          recurrence?: string
+          run_count?: number
+          scheduled_at?: string
+          status?: string
+          target_kind?: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_dependencies: {
         Row: {
           blocked_by_task_id: string
@@ -884,6 +932,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dispatch_scheduled_messages: { Args: never; Returns: number }
       generate_recurring_tasks_for_today: { Args: never; Returns: number }
       get_pj_tasks_for_report: {
         Args: { end_iso: string; start_iso: string }
