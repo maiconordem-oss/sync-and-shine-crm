@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   ShieldCheck,
   CalendarDays,
+  CalendarClock,
   Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ const NAV: NavItem[] = [
   { to: "/members", label: "Membros", icon: Users, adminOnly: true, permKey: "members.manage" },
   // members.view handled by adminOnly above
   { to: "/permissions", label: "Permissões", icon: ShieldCheck, adminOnly: true },
+  { to: "/scheduled-messages", label: "Mensagens agendadas", icon: CalendarClock, adminOnly: true },
 ];
 
 function AppLayout() {

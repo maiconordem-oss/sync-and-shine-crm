@@ -144,20 +144,31 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          reply_to_id: string | null
         }
         Insert: {
           author_id?: string | null
           content: string
           created_at?: string
           id?: string
+          reply_to_id?: string | null
         }
         Update: {
           author_id?: string | null
           content?: string
           created_at?: string
           id?: string
+          reply_to_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       checklists: {
         Row: {
@@ -235,10 +246,12 @@ export type Database = {
           attachment_url: string | null
           content: string
           created_at: string
+          delivered_at: string | null
           id: string
           kind: string
           read_at: string | null
           recipient_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -249,10 +262,12 @@ export type Database = {
           attachment_url?: string | null
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           kind?: string
           read_at?: string | null
           recipient_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -263,13 +278,23 @@ export type Database = {
           attachment_url?: string | null
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           kind?: string
           read_at?: string | null
           recipient_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "direct_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       monthly_closures: {
         Row: {
@@ -594,6 +619,54 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_messages: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string
+          days_of_week: number[]
+          id: string
+          last_run_at: string | null
+          recurrence: string
+          run_count: number
+          scheduled_at: string
+          status: string
+          target_kind: string
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by: string
+          days_of_week?: number[]
+          id?: string
+          last_run_at?: string | null
+          recurrence?: string
+          run_count?: number
+          scheduled_at: string
+          status?: string
+          target_kind: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string
+          days_of_week?: number[]
+          id?: string
+          last_run_at?: string | null
+          recurrence?: string
+          run_count?: number
+          scheduled_at?: string
+          status?: string
+          target_kind?: string
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_dependencies: {
         Row: {
           blocked_by_task_id: string
@@ -859,6 +932,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dispatch_scheduled_messages: { Args: never; Returns: number }
       generate_recurring_tasks_for_today: { Args: never; Returns: number }
       get_pj_tasks_for_report: {
         Args: { end_iso: string; start_iso: string }

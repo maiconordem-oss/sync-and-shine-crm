@@ -158,6 +158,13 @@ export function useGlobalDMListener(onOpen: (peerId: string) => void) {
           if (m.sender_id === user.id) return;
           setUnread((n) => n + 1);
 
+          // Marca como entregue (status "entregue" no remetente)
+          void supabase
+            .from("direct_messages")
+            .update({ delivered_at: new Date().toISOString() })
+            .eq("id", m.id)
+            .is("delivered_at", null);
+
           const senderName = await resolveName(m.sender_id);
           const isNudge = m.kind === "nudge";
 

@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTasksRouteImport } from './routes/_app.tasks'
+import { Route as AppScheduledMessagesRouteImport } from './routes/_app.scheduled-messages'
 import { Route as AppReportsRouteImport } from './routes/_app.reports'
 import { Route as AppRecurringTasksRouteImport } from './routes/_app.recurring-tasks'
 import { Route as AppProjectsRouteImport } from './routes/_app.projects'
@@ -44,6 +45,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppTasksRoute = AppTasksRouteImport.update({
   id: '/tasks',
   path: '/tasks',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppScheduledMessagesRoute = AppScheduledMessagesRouteImport.update({
+  id: '/scheduled-messages',
+  path: '/scheduled-messages',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof AppProjectsRoute
   '/recurring-tasks': typeof AppRecurringTasksRoute
   '/reports': typeof AppReportsRoute
+  '/scheduled-messages': typeof AppScheduledMessagesRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/projects': typeof AppProjectsRoute
   '/recurring-tasks': typeof AppRecurringTasksRoute
   '/reports': typeof AppReportsRoute
+  '/scheduled-messages': typeof AppScheduledMessagesRoute
   '/tasks': typeof AppTasksRouteWithChildren
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/_app/projects': typeof AppProjectsRoute
   '/_app/recurring-tasks': typeof AppRecurringTasksRoute
   '/_app/reports': typeof AppReportsRoute
+  '/_app/scheduled-messages': typeof AppScheduledMessagesRoute
   '/_app/tasks': typeof AppTasksRouteWithChildren
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
 }
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/recurring-tasks'
     | '/reports'
+    | '/scheduled-messages'
     | '/tasks'
     | '/tasks/$taskId'
   fileRoutesByTo: FileRoutesByTo
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/recurring-tasks'
     | '/reports'
+    | '/scheduled-messages'
     | '/tasks'
     | '/tasks/$taskId'
   id:
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/_app/projects'
     | '/_app/recurring-tasks'
     | '/_app/reports'
+    | '/_app/scheduled-messages'
     | '/_app/tasks'
     | '/_app/tasks/$taskId'
   fileRoutesById: FileRoutesById
@@ -260,6 +272,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof AppTasksRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/scheduled-messages': {
+      id: '/_app/scheduled-messages'
+      path: '/scheduled-messages'
+      fullPath: '/scheduled-messages'
+      preLoaderRoute: typeof AppScheduledMessagesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -381,6 +400,7 @@ interface AppRouteChildren {
   AppProjectsRoute: typeof AppProjectsRoute
   AppRecurringTasksRoute: typeof AppRecurringTasksRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppScheduledMessagesRoute: typeof AppScheduledMessagesRoute
   AppTasksRoute: typeof AppTasksRouteWithChildren
 }
 
@@ -397,6 +417,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProjectsRoute: AppProjectsRoute,
   AppRecurringTasksRoute: AppRecurringTasksRoute,
   AppReportsRoute: AppReportsRoute,
+  AppScheduledMessagesRoute: AppScheduledMessagesRoute,
   AppTasksRoute: AppTasksRouteWithChildren,
 }
 
@@ -410,12 +431,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
