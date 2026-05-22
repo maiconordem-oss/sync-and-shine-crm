@@ -1,0 +1,2 @@
+ALTER TABLE public.direct_messages DROP CONSTRAINT IF EXISTS direct_messages_kind_check;
+ALTER TABLE public.direct_messages ADD CONSTRAINT direct_messages_kind_check CHECK (kind IN ('text','nudge','attachment'));
