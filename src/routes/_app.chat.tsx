@@ -234,7 +234,22 @@ function ChatPage() {
     const nowIso = new Date().toISOString();
     // Atualização otimista local para o badge/ícone sumirem imediatamente
     setDms((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, read_at: nowIso, delivered_at: m.delivered_at ?? nowIso } : m)));
-    void supabase.from("direct_messages").update({ read_at: nowIso }).in("id", ids);
+    void supabase
+      .from("direct_messages")
+      .update({ read_at: nowIso, delivered_at: nowIso })
+      .in("id", ids)
+      .is("read_at", null)
+      .eq("recipient_id", user.id)
+      .select("id")
+      .then(({ error, data }) => {
+        if (error) {
+          console.warn("[chat] markRead falhou", error);
+          // Reverte estado local para refletir realidade do banco
+          setDms((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, read_at: null } : m)));
+        } else {
+          console.debug("[chat] markRead ok", { count: data?.length ?? 0 });
+        }
+      });
   }, [user, active, dms]);
 
   useEffect(() => { markRead(); }, [markRead]);
