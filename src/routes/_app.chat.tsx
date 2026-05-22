@@ -412,7 +412,11 @@ function ChatPage() {
         attachment_size: file.size,
         attachment_mime: mime,
       }]);
-      if (error) throw error;
+      if (error) {
+        // Limpa o arquivo recém-enviado se a mensagem falhou ao gravar
+        await supabase.storage.from("chat-attachments").remove([path]).catch(() => {});
+        throw error;
+      }
       play("dm_sent");
       setReplyTo(null);
     } catch (e) {
