@@ -163,7 +163,12 @@ export function useGlobalDMListener(onOpen: (peerId: string) => void) {
             .from("direct_messages")
             .update({ delivered_at: new Date().toISOString() })
             .eq("id", m.id)
-            .is("delivered_at", null);
+            .eq("recipient_id", user.id)
+            .is("delivered_at", null)
+            .select("id")
+            .then(({ error }) => {
+              if (error) console.warn("[chat] delivered_at falhou", error);
+            });
 
           const senderName = await resolveName(m.sender_id);
           const isNudge = m.kind === "nudge";
