@@ -231,7 +231,10 @@ function ChatPage() {
     const unread = dms.filter((m) => m.recipient_id === user.id && m.sender_id === peer && !m.read_at);
     if (unread.length === 0) return;
     const ids = unread.map((m) => m.id);
-    void supabase.from("direct_messages").update({ read_at: new Date().toISOString() }).in("id", ids);
+    const nowIso = new Date().toISOString();
+    // Atualização otimista local para o badge/ícone sumirem imediatamente
+    setDms((prev) => prev.map((m) => (ids.includes(m.id) ? { ...m, read_at: nowIso, delivered_at: m.delivered_at ?? nowIso } : m)));
+    void supabase.from("direct_messages").update({ read_at: nowIso }).in("id", ids);
   }, [user, active, dms]);
 
   useEffect(() => { markRead(); }, [markRead]);
@@ -409,7 +412,11 @@ function ChatPage() {
         attachment_size: file.size,
         attachment_mime: mime,
       }]);
-      if (error) throw error;
+      if (error) {
+        // Limpa o arquivo recém-enviado se a mensagem falhou ao gravar
+        await supabase.storage.from("chat-attachments").remove([path]).catch(() => {});
+        throw error;
+      }
       play("dm_sent");
       setReplyTo(null);
     } catch (e) {
