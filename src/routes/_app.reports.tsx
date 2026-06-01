@@ -49,6 +49,8 @@ interface TaskRow {
   task_type: "internal" | "external";
   status: string;
   completed_at: string | null;
+  canceled_at?: string | null;
+  cancel_reason?: string | null;
 }
 
 interface Closure {
@@ -553,8 +555,15 @@ function PJRow({
                   const taskPayment = row.payments.find((p) => p.task_id === t.id && p.status !== "cancelled");
                   const isPaidTask = taskPayment?.status === "paid";
                   const isPendingTask = !isPaidTask;
+                  const isCanceled = t.status === "canceled";
+                  const canceledAfterDone = isCanceled && !!t.completed_at;
+                  const doneNoPayment = t.status === "done" && !taskPayment && Number(t.service_value ?? 0) > 0;
                   return (
-                    <div key={t.id} className="rounded-lg border bg-background p-3 space-y-2">
+                    <div key={t.id} className={cn(
+                      "rounded-lg border bg-background p-3 space-y-2",
+                      isCanceled && "border-rose-200 bg-rose-50/40",
+                      doneNoPayment && "border-amber-300 bg-amber-50/40",
+                    )}>
                       {/* Title + value */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -563,15 +572,26 @@ function PJRow({
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 h-4", {
                               "border-emerald-300 text-emerald-700": t.status === "done",
                               "border-amber-300 text-amber-700": t.status === "awaiting_approval",
+                              "border-rose-300 text-rose-700 bg-rose-50": isCanceled,
                             })}>
-                              {STATUS_LABEL[t.status] ?? t.status}
+                              {canceledAfterDone ? "Cancelada após conclusão" : (STATUS_LABEL[t.status] ?? t.status)}
                             </Badge>
                             {t.completed_at && (
                               <span className="text-[11px] text-muted-foreground">
                                 Concluída em {new Date(t.completed_at).toLocaleDateString("pt-BR")}
                               </span>
                             )}
+                            {t.canceled_at && (
+                              <span className="text-[11px] text-rose-700">
+                                Cancelada em {new Date(t.canceled_at).toLocaleDateString("pt-BR")}
+                              </span>
+                            )}
                           </div>
+                          {t.cancel_reason && (
+                            <div className="text-[11px] text-rose-700 mt-1 italic">
+                              Motivo: {t.cancel_reason}
+                            </div>
+                          )}
                         </div>
                         <div className="text-right shrink-0">
                           <div className="text-base font-bold">
@@ -586,8 +606,22 @@ function PJRow({
                         </div>
                       </div>
 
+                      {/* Alertas de inconsistência */}
+                      {canceledAfterDone && taskPayment && (
+                        <div className="flex items-start gap-1.5 text-[11px] text-rose-700 bg-rose-100/60 rounded px-2 py-1.5">
+                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                          <span>Pagamento <strong>preservado</strong> — o serviço foi concluído antes do cancelamento. Confira antes de fechar o mês.</span>
+                        </div>
+                      )}
+                      {doneNoPayment && (
+                        <div className="flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-100/60 rounded px-2 py-1.5">
+                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                          <span>Tarefa concluída <strong>sem pagamento</strong> registrado. Verifique se foi gerado corretamente.</span>
+                        </div>
+                      )}
+
                       {/* Payment action if pending */}
-                      {isPendingTask && t.service_value && !isPaid && (
+                      {isPendingTask && t.service_value && !isPaid && !isCanceled && (
                         <div className="flex items-center justify-between pt-1 border-t border-dashed">
                           <span className="text-xs text-muted-foreground">
                             {taskPayment

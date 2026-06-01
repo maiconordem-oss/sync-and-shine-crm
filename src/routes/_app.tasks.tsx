@@ -55,7 +55,7 @@ function TasksRoute() {
   return <TasksPage />;
 }
 
-type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "waiting" | "awaiting_approval";
+type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "canceled" | "waiting" | "awaiting_approval";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskRow {
@@ -144,6 +144,7 @@ function TasksPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
 
   // Create form
 
@@ -207,13 +208,42 @@ function TasksPage() {
     toast.success(`→ ${STATUS_LABEL[newSt]}`);
   };
 
-  const deleteTask = async (taskId: string) => {
+  const requestRemoveTask = (taskId: string) => {
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    setRemoveTask(t);
+  };
+
+  const confirmCancelTask = async (taskId: string, reason: string) => {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: "canceled", cancel_reason: reason, canceled_at: new Date().toISOString(), canceled_by: user?.id ?? null })
+      .eq("id", taskId);
+    if (error) { toast.error(error.message); return; }
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "canceled" as TaskStatus } : t));
+    setRemoveTask(null);
+    toast.success("Tarefa cancelada. Histórico preservado.");
+  };
+
+  const confirmDeleteTask = async (taskId: string, reason: string) => {
+    // Registra motivo no audit log antes de excluir (best-effort)
+    if (reason.trim()) {
+      await supabase.from("task_audit_log").insert([{
+        task_id: taskId,
+        actor_id: user?.id ?? null,
+        action: "delete_reason",
+        details: { reason },
+      }]);
+    }
     const { error } = await supabase.from("tasks").delete().eq("id", taskId);
     if (error) { toast.error(error.message); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     if (panelTaskId === taskId) setPanelTaskId(null);
+    setRemoveTask(null);
     toast.success("Tarefa excluída.");
   };
+
+
 
   const onDragEnd = async (e: DragEndEvent) => {
     if (!e.over) return;
@@ -337,7 +367,7 @@ function TasksPage() {
                     isManagerOrAdmin={isManagerOrAdmin}
                     onQuickStatus={quickStatusChange}
                     isAdmin={isAdmin}
-                    onDelete={deleteTask}
+                    onDelete={requestRemoveTask}
                     userId={user?.id ?? null}
                     onInlineCreate={(task) => {
                       setTasks((prev) => [...prev, task]);
@@ -355,7 +385,7 @@ function TasksPage() {
               activePanelId={panelTaskId}
               onOpenPanel={setPanelTaskId}
               onQuickStatus={quickStatusChange}
-              onDelete={deleteTask}
+              onDelete={requestRemoveTask}
               isManagerOrAdmin={isManagerOrAdmin}
               userId={user?.id ?? null}
               navigate={navigate}
@@ -384,7 +414,7 @@ function TasksPage() {
                 user={user}
                 authProfile={profile}
                 isManagerOrAdmin={isManagerOrAdmin}
-                onDelete={() => deleteTask(panelTaskId)}
+                onDelete={() => requestRemoveTask(panelTaskId)}
                 onTaskUpdate={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
                 navigate={navigate}
               />
@@ -402,7 +432,108 @@ function TasksPage() {
         onCreated={() => void load()}
       />
 
+      <RemoveTaskDialog
+        task={removeTask}
+        onClose={() => setRemoveTask(null)}
+        onCancel={confirmCancelTask}
+        onDelete={confirmDeleteTask}
+      />
+
     </div>
+  );
+}
+
+// ─── Remove Task Dialog (cancelar com motivo vs excluir) ──────────────────────
+
+function RemoveTaskDialog({
+  task, onClose, onCancel, onDelete,
+}: {
+  task: TaskRow | null;
+  onClose: () => void;
+  onCancel: (taskId: string, reason: string) => Promise<void>;
+  onDelete: (taskId: string, reason: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (task) setReason(""); }, [task]);
+
+  if (!task) return null;
+  const isExternalPaid = task.task_type === "external" && Number(task.service_value ?? 0) > 0;
+  const hasWork = !!task.completed_at || task.status === "done" || task.status === "in_review";
+  // Externa com valor: SEMPRE cancela (preserva histórico e pagamento se houver)
+  // Outras: pode excluir; se houver trabalho, sugerimos cancelar
+  const mustCancel = isExternalPaid;
+  const suggestCancel = hasWork && !mustCancel;
+
+  const doCancel = async () => {
+    if (!reason.trim()) { toast.error("Informe o motivo do cancelamento."); return; }
+    setBusy(true);
+    await onCancel(task.id, reason.trim());
+    setBusy(false);
+  };
+  const doDelete = async () => {
+    setBusy(true);
+    await onDelete(task.id, reason.trim());
+    setBusy(false);
+  };
+
+  return (
+    <AlertDialog open={!!task} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            {mustCancel ? "Cancelar tarefa externa?" : "Remover tarefa?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <span className="block font-medium text-foreground">"{task.title}"</span>
+            {mustCancel ? (
+              <span className="block">
+                Tarefas externas com valor de serviço <strong>não podem ser excluídas</strong> para preservar o histórico financeiro.
+                {hasWork && " Como o serviço já foi registrado, o pagamento gerado será mantido."}
+              </span>
+            ) : suggestCancel ? (
+              <span className="block">Esta tarefa já tem trabalho registrado. Recomendamos <strong>cancelar</strong> em vez de excluir, para manter o histórico.</span>
+            ) : (
+              <span className="block">Esta ação não pode ser desfeita.</span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Motivo {mustCancel ? "(obrigatório)" : "(opcional)"}
+          </label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Ex: cliente desistiu, duplicidade, erro de cadastro..."
+            rows={3}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel disabled={busy}>Voltar</AlertDialogCancel>
+          {mustCancel ? (
+            <AlertDialogAction onClick={doCancel} disabled={busy || !reason.trim()} className="bg-rose-600 hover:bg-rose-700">
+              {busy ? "Cancelando..." : "Cancelar tarefa"}
+            </AlertDialogAction>
+          ) : (
+            <>
+              {suggestCancel && (
+                <Button variant="outline" onClick={doCancel} disabled={busy || !reason.trim()}>
+                  Cancelar (manter histórico)
+                </Button>
+              )}
+              <AlertDialogAction onClick={doDelete} disabled={busy} className="bg-rose-600 hover:bg-rose-700">
+                {busy ? "Excluindo..." : "Excluir definitivamente"}
+              </AlertDialogAction>
+            </>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -776,7 +907,7 @@ function TaskListView({
                       {isManagerOrAdmin && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(t.id)}><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(t.id)}><Trash2 className="h-3.5 w-3.5 mr-2" /> Remover</DropdownMenuItem>
                         </>
                       )}
                     </DropdownMenuContent>
@@ -1304,7 +1435,7 @@ function TaskSidePanel({
             </button>
           ))}
           {canDelete && (
-            <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Excluir">
+            <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Remover">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
@@ -1744,12 +1875,16 @@ function TaskSidePanel({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>Remover tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {task.task_type === "external" && Number(task.service_value ?? 0) > 0
+                ? "Tarefas externas com valor serão canceladas (não excluídas) para preservar o histórico financeiro. Você poderá informar o motivo na próxima etapa."
+                : "Você poderá informar o motivo na próxima etapa."}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Excluir</AlertDialogAction>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Continuar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
