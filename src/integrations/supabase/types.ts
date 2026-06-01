@@ -976,6 +976,7 @@ export type Database = {
         | "done"
         | "deferred"
         | "in_review"
+        | "canceled"
       task_type: "internal" | "external"
     }
     CompositeTypes: {
@@ -1124,6 +1125,7 @@ export const Constants = {
         "done",
         "deferred",
         "in_review",
+        "canceled",
       ],
       task_type: ["internal", "external"],
     },
