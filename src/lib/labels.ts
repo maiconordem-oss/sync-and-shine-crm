@@ -4,12 +4,14 @@ export const STATUS_LABEL: Record<string, string> = {
   in_review: "Em revisão",
   done: "Concluída",
   deferred: "Adiada",
+  canceled: "Cancelada",
   // Mantidos para compatibilidade com dados existentes
   waiting: "Aguardando",
   awaiting_approval: "Em revisão",
 };
 
 // Fluxo oficial: Nova → Em andamento → Em revisão → Concluída
+// 'canceled' fica fora do fluxo (só via ação de cancelamento)
 export const STATUS_ORDER = ["new", "in_progress", "in_review", "done", "deferred"] as const;
 
 export const PRIORITY_LABEL: Record<string, string> = {
@@ -33,6 +35,7 @@ export const STATUS_COLOR: Record<string, string> = {
   in_review: "bg-purple-50 text-purple-700 border-purple-200",
   done: "bg-emerald-50 text-emerald-700 border-emerald-200",
   deferred: "bg-neutral-100 text-neutral-600 border-neutral-200",
+  canceled: "bg-rose-50 text-rose-700 border-rose-200",
   awaiting_approval: "bg-purple-50 text-purple-700 border-purple-200",
 };
 
