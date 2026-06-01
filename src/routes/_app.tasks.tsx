@@ -55,7 +55,7 @@ function TasksRoute() {
   return <TasksPage />;
 }
 
-type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "waiting" | "awaiting_approval";
+type TaskStatus = "new" | "in_progress" | "in_review" | "done" | "deferred" | "canceled" | "waiting" | "awaiting_approval";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 interface TaskRow {
