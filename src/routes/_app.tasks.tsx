@@ -367,7 +367,7 @@ function TasksPage() {
                     isManagerOrAdmin={isManagerOrAdmin}
                     onQuickStatus={quickStatusChange}
                     isAdmin={isAdmin}
-                    onDelete={deleteTask}
+                    onDelete={requestRemoveTask}
                     userId={user?.id ?? null}
                     onInlineCreate={(task) => {
                       setTasks((prev) => [...prev, task]);
@@ -385,7 +385,7 @@ function TasksPage() {
               activePanelId={panelTaskId}
               onOpenPanel={setPanelTaskId}
               onQuickStatus={quickStatusChange}
-              onDelete={deleteTask}
+              onDelete={requestRemoveTask}
               isManagerOrAdmin={isManagerOrAdmin}
               userId={user?.id ?? null}
               navigate={navigate}
@@ -414,7 +414,7 @@ function TasksPage() {
                 user={user}
                 authProfile={profile}
                 isManagerOrAdmin={isManagerOrAdmin}
-                onDelete={() => deleteTask(panelTaskId)}
+                onDelete={() => requestRemoveTask(panelTaskId)}
                 onTaskUpdate={(updated) => setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))}
                 navigate={navigate}
               />
