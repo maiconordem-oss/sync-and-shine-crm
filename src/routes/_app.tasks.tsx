@@ -432,7 +432,108 @@ function TasksPage() {
         onCreated={() => void load()}
       />
 
+      <RemoveTaskDialog
+        task={removeTask}
+        onClose={() => setRemoveTask(null)}
+        onCancel={confirmCancelTask}
+        onDelete={confirmDeleteTask}
+      />
+
     </div>
+  );
+}
+
+// ─── Remove Task Dialog (cancelar com motivo vs excluir) ──────────────────────
+
+function RemoveTaskDialog({
+  task, onClose, onCancel, onDelete,
+}: {
+  task: TaskRow | null;
+  onClose: () => void;
+  onCancel: (taskId: string, reason: string) => Promise<void>;
+  onDelete: (taskId: string, reason: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (task) setReason(""); }, [task]);
+
+  if (!task) return null;
+  const isExternalPaid = task.task_type === "external" && Number(task.service_value ?? 0) > 0;
+  const hasWork = !!task.completed_at || task.status === "done" || task.status === "in_review";
+  // Externa com valor: SEMPRE cancela (preserva histórico e pagamento se houver)
+  // Outras: pode excluir; se houver trabalho, sugerimos cancelar
+  const mustCancel = isExternalPaid;
+  const suggestCancel = hasWork && !mustCancel;
+
+  const doCancel = async () => {
+    if (!reason.trim()) { toast.error("Informe o motivo do cancelamento."); return; }
+    setBusy(true);
+    await onCancel(task.id, reason.trim());
+    setBusy(false);
+  };
+  const doDelete = async () => {
+    setBusy(true);
+    await onDelete(task.id, reason.trim());
+    setBusy(false);
+  };
+
+  return (
+    <AlertDialog open={!!task} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            {mustCancel ? "Cancelar tarefa externa?" : "Remover tarefa?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="space-y-2">
+            <span className="block font-medium text-foreground">"{task.title}"</span>
+            {mustCancel ? (
+              <span className="block">
+                Tarefas externas com valor de serviço <strong>não podem ser excluídas</strong> para preservar o histórico financeiro.
+                {hasWork && " Como o serviço já foi registrado, o pagamento gerado será mantido."}
+              </span>
+            ) : suggestCancel ? (
+              <span className="block">Esta tarefa já tem trabalho registrado. Recomendamos <strong>cancelar</strong> em vez de excluir, para manter o histórico.</span>
+            ) : (
+              <span className="block">Esta ação não pode ser desfeita.</span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Motivo {mustCancel ? "(obrigatório)" : "(opcional)"}
+          </label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Ex: cliente desistiu, duplicidade, erro de cadastro..."
+            rows={3}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel disabled={busy}>Voltar</AlertDialogCancel>
+          {mustCancel ? (
+            <AlertDialogAction onClick={doCancel} disabled={busy || !reason.trim()} className="bg-rose-600 hover:bg-rose-700">
+              {busy ? "Cancelando..." : "Cancelar tarefa"}
+            </AlertDialogAction>
+          ) : (
+            <>
+              {suggestCancel && (
+                <Button variant="outline" onClick={doCancel} disabled={busy || !reason.trim()}>
+                  Cancelar (manter histórico)
+                </Button>
+              )}
+              <AlertDialogAction onClick={doDelete} disabled={busy} className="bg-rose-600 hover:bg-rose-700">
+                {busy ? "Excluindo..." : "Excluir definitivamente"}
+              </AlertDialogAction>
+            </>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
