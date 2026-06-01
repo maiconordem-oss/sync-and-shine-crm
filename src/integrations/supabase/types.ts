@@ -667,6 +667,33 @@ export type Database = {
         }
         Relationships: []
       }
+      task_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          task_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          task_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          task_id?: string
+        }
+        Relationships: []
+      }
       task_dependencies: {
         Row: {
           blocked_by_task_id: string
@@ -756,6 +783,9 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           assignee_id: string | null
+          cancel_reason: string | null
+          canceled_at: string | null
+          canceled_by: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -781,6 +811,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
+          cancel_reason?: string | null
+          canceled_at?: string | null
+          canceled_by?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -806,6 +839,9 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
+          cancel_reason?: string | null
+          canceled_at?: string | null
+          canceled_by?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -939,6 +975,8 @@ export type Database = {
         Returns: {
           approved_at: string
           assignee_id: string
+          cancel_reason: string
+          canceled_at: string
           completed_at: string
           id: string
           service_value: number
