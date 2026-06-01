@@ -907,7 +907,7 @@ function TaskListView({
                       {isManagerOrAdmin && (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(t.id)}><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(t.id)}><Trash2 className="h-3.5 w-3.5 mr-2" /> Remover</DropdownMenuItem>
                         </>
                       )}
                     </DropdownMenuContent>
@@ -1435,7 +1435,7 @@ function TaskSidePanel({
             </button>
           ))}
           {canDelete && (
-            <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Excluir">
+            <button onClick={() => setDeleteOpen(true)} className="p-1.5 rounded hover:bg-rose-50 text-muted-foreground hover:text-rose-600" title="Remover">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
