@@ -49,6 +49,8 @@ interface TaskRow {
   task_type: "internal" | "external";
   status: string;
   completed_at: string | null;
+  canceled_at?: string | null;
+  cancel_reason?: string | null;
 }
 
 interface Closure {
