@@ -1875,12 +1875,16 @@ function TaskSidePanel({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogTitle>Remover tarefa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {task.task_type === "external" && Number(task.service_value ?? 0) > 0
+                ? "Tarefas externas com valor serão canceladas (não excluídas) para preservar o histórico financeiro. Você poderá informar o motivo na próxima etapa."
+                : "Você poderá informar o motivo na próxima etapa."}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Excluir</AlertDialogAction>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setDeleteOpen(false); onDelete(); }}>Continuar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
