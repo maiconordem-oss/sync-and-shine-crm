@@ -208,13 +208,42 @@ function TasksPage() {
     toast.success(`→ ${STATUS_LABEL[newSt]}`);
   };
 
-  const deleteTask = async (taskId: string) => {
+  const requestRemoveTask = (taskId: string) => {
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    setRemoveTask(t);
+  };
+
+  const confirmCancelTask = async (taskId: string, reason: string) => {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: "canceled", cancel_reason: reason, canceled_at: new Date().toISOString(), canceled_by: user?.id ?? null })
+      .eq("id", taskId);
+    if (error) { toast.error(error.message); return; }
+    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: "canceled" as TaskStatus } : t));
+    setRemoveTask(null);
+    toast.success("Tarefa cancelada. Histórico preservado.");
+  };
+
+  const confirmDeleteTask = async (taskId: string, reason: string) => {
+    // Registra motivo no audit log antes de excluir (best-effort)
+    if (reason.trim()) {
+      await supabase.from("task_audit_log").insert([{
+        task_id: taskId,
+        actor_id: user?.id ?? null,
+        action: "delete_reason",
+        details: { reason },
+      }]);
+    }
     const { error } = await supabase.from("tasks").delete().eq("id", taskId);
     if (error) { toast.error(error.message); return; }
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     if (panelTaskId === taskId) setPanelTaskId(null);
+    setRemoveTask(null);
     toast.success("Tarefa excluída.");
   };
+
+
 
   const onDragEnd = async (e: DragEndEvent) => {
     if (!e.over) return;
