@@ -144,6 +144,7 @@ function TasksPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
 
   // Create form
 
