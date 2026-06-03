@@ -51,6 +51,7 @@ interface TaskRow {
   completed_at: string | null;
   canceled_at?: string | null;
   cancel_reason?: string | null;
+  created_at?: string | null;
 }
 
 interface Closure {
