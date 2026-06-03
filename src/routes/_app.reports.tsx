@@ -51,6 +51,7 @@ interface TaskRow {
   completed_at: string | null;
   canceled_at?: string | null;
   cancel_reason?: string | null;
+  created_at?: string | null;
 }
 
 interface Closure {
@@ -568,6 +569,16 @@ function PJRow({
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium leading-snug">{t.title}</div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[10px] text-muted-foreground font-mono">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }}
+                              className="hover:text-foreground underline-offset-2 hover:underline"
+                              title="Copiar ID completo"
+                            >
+                              #{t.id.slice(0, 8)}
+                            </button>
+                          </div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 h-4", {
                               "border-emerald-300 text-emerald-700": t.status === "done",
@@ -576,14 +587,19 @@ function PJRow({
                             })}>
                               {canceledAfterDone ? "Cancelada após conclusão" : (STATUS_LABEL[t.status] ?? t.status)}
                             </Badge>
+                            {t.created_at && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Criada em {new Date(t.created_at).toLocaleDateString("pt-BR")}
+                              </span>
+                            )}
                             {t.completed_at && (
                               <span className="text-[11px] text-muted-foreground">
-                                Concluída em {new Date(t.completed_at).toLocaleDateString("pt-BR")}
+                                • Concluída em {new Date(t.completed_at).toLocaleDateString("pt-BR")}
                               </span>
                             )}
                             {t.canceled_at && (
                               <span className="text-[11px] text-rose-700">
-                                Cancelada em {new Date(t.canceled_at).toLocaleDateString("pt-BR")}
+                                • Cancelada em {new Date(t.canceled_at).toLocaleDateString("pt-BR")}
                               </span>
                             )}
                           </div>

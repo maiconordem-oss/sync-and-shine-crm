@@ -978,6 +978,7 @@ export type Database = {
           cancel_reason: string
           canceled_at: string
           completed_at: string
+          created_at: string
           id: string
           service_value: number
           status: string
