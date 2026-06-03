@@ -114,106 +114,221 @@ interface PJRow {
 // ─── PJ View (próprio dashboard financeiro) ───────────────────────────────────
 
 function PJView({ userId }: { userId: string }) {
+  const today = new Date();
+  const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(defaultMonth);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [closures, setClosures] = useState<Closure[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [profile, setProfile] = useState<PJProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const { startISO, endISO, startDate, endDate, label: monthLabel } = monthBounds(month);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [p, c, t] = await Promise.all([
+      const [p, c, t, prof] = await Promise.all([
         supabase.from("payments").select("*").eq("beneficiary_user_id", userId).order("created_at", { ascending: false }),
         supabase.from("monthly_closures").select("*").eq("pj_user_id", userId).order("reference_month", { ascending: false }),
-        supabase.from("tasks").select("id,title,service_value,task_type,status,completed_at").eq("assignee_id", userId).eq("task_type", "external").order("completed_at", { ascending: false }),
+        supabase.rpc("get_pj_tasks_for_report", { start_iso: startISO, end_iso: endISO }),
+        supabase.from("profiles").select("id,full_name,email,contract_type").eq("id", userId).maybeSingle(),
       ]);
       setPayments((p.data ?? []) as PaymentRow[]);
       setClosures((c.data ?? []) as Closure[]);
-      setTasks((t.data ?? []) as TaskRow[]);
+      setTasks(((t.data ?? []) as TaskRow[]).filter((x) => x.assignee_id === userId));
+      setProfile((prof.data ?? null) as PJProfile | null);
       setLoading(false);
     };
     void load();
-  }, [userId]);
+  }, [userId, startISO, endISO]);
 
-  const totalPending = payments.filter((p) => p.status === "pending").reduce((s, p) => s + Number(p.amount), 0);
-  const totalPaid = payments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
+  const monthTaskIds = new Set(tasks.map((t) => t.id));
+  const monthPayments = payments.filter((p) => {
+    if (p.status === "cancelled") return false;
+    if (p.status === "paid" && p.paid_date && p.paid_date < startDate) return false;
+    if (p.task_id && !monthTaskIds.has(p.task_id)) return false;
+    if (!p.task_id) {
+      const inDue = p.due_date && p.due_date >= startDate && p.due_date < endDate;
+      const inCreated = !p.due_date && p.created_at >= startISO && p.created_at < endISO;
+      if (!inDue && !inCreated) return false;
+    }
+    return true;
+  });
+  const tasksWithValue = tasks.filter((t) => t.service_value && Number(t.service_value) > 0);
+  const sumTasks = tasksWithValue.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
+  const manuals = monthPayments.filter((p) => !p.task_id);
+  const manualTotal = manuals.reduce((s, p) => s + Number(p.amount), 0);
+  const totalToPay = sumTasks + manualTotal;
+  const closure = closures.find((c) => c.reference_month === month) ?? null;
+  const totalPaid = closure?.status === "paid" ? Number(closure.total_amount ?? 0) : 0;
+  const totalPending = Math.max(0, totalToPay - totalPaid);
+
+  const handlePrint = () => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Meu relatório — ${monthLabel}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:32px;color:#111;max-width:800px;margin:0 auto}
+        h1{font-size:20px;margin:0 0 4px}
+        .sub{font-size:13px;color:#666;margin:0 0 24px}
+        .meta{float:right;font-size:11px;color:#888;text-align:right;line-height:1.8}
+        h2{font-size:14px;margin:24px 0 8px;padding-bottom:4px;border-bottom:2px solid #eee}
+        table{width:100%;border-collapse:collapse;margin:8px 0 16px}
+        th{background:#f0f0f0;text-align:left;padding:8px 12px;font-size:12px;border-bottom:2px solid #ccc}
+        td{padding:8px 12px;font-size:12px;border-bottom:1px solid #eee;vertical-align:top}
+        .right{text-align:right}.center{text-align:center}
+        .summary{margin-top:24px;margin-left:auto;width:300px;border:1px solid #ddd;border-radius:8px;overflow:hidden}
+        .summary td{border-bottom:1px solid #eee;font-size:13px}
+        .summary tr:last-child td{font-weight:bold;font-size:14px;background:#f9f9f9}
+        .pending{color:#b45309}.paid{color:#065f46}
+        .badge-paid{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px}
+        .badge-pend{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px}
+        .badge-canc{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:12px;font-size:11px}
+        @media print{@page{margin:20mm}}
+      </style></head><body>
+      <div class="meta">Período: ${monthLabel}<br>Gerado em: ${new Date().toLocaleString("pt-BR")}</div>
+      <h1>${profile?.full_name ?? "Prestador PJ"}</h1>
+      <p class="sub">${profile?.email ?? ""}</p>
+
+      <h2>Tarefas do mês</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Tarefa</th><th>Criada</th><th>Concluída</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+        <tbody>${tasks.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+          const pay = monthPayments.find((p) => p.task_id === t.id);
+          const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".", ",") : "—";
+          const cre = t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—";
+          const con = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
+          const isCanc = t.status === "canceled";
+          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
+          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td>${t.title}</td><td>${cre}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+        }).join("")}</tbody>
+      </table>
+
+      ${manuals.length > 0 ? `
+      <h2>Pagamentos avulsos</h2>
+      <table>
+        <thead><tr><th>Descrição</th><th>Vencimento</th><th>Pagamento</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+        <tbody>${manuals.map((p) => {
+          const badge = p.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
+          const due = p.due_date ? new Date(p.due_date).toLocaleDateString("pt-BR") : "—";
+          const paid = p.paid_date ? new Date(p.paid_date).toLocaleDateString("pt-BR") : "—";
+          const val = "R$ " + Number(p.amount).toFixed(2).replace(".", ",");
+          return `<tr><td>${p.description}</td><td>${due}</td><td>${paid}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+        }).join("")}</tbody>
+      </table>` : ""}
+
+      <table class="summary">
+        <tr><td style="padding:8px 12px">Tarefas no mês</td><td class="right" style="padding:8px 12px">${tasks.length}</td></tr>
+        ${manuals.length > 0 ? `<tr><td style="padding:8px 12px">Pagamentos avulsos</td><td class="right" style="padding:8px 12px">${manuals.length}</td></tr>` : ""}
+        <tr><td style="padding:8px 12px" class="pending">A receber</td><td class="right pending" style="padding:8px 12px">R$ ${totalPending.toFixed(2).replace(".", ",")}</td></tr>
+        <tr><td style="padding:8px 12px" class="paid">Pago</td><td class="right paid" style="padding:8px 12px">R$ ${totalPaid.toFixed(2).replace(".", ",")}</td></tr>
+        <tr><td style="padding:8px 12px">Total do mês</td><td class="right" style="padding:8px 12px">R$ ${totalToPay.toFixed(2).replace(".", ",")}</td></tr>
+      </table>
+      ${closure?.notes ? `<p style="margin-top:16px;font-size:12px;color:#666"><strong>Obs:</strong> ${closure.notes}</p>` : ""}
+      <p style="margin-top:32px;font-size:10px;color:#999;text-align:center">Documento gerado automaticamente — somente leitura.</p>
+      <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
 
   if (loading) return <div className="text-sm text-muted-foreground p-6">Carregando seus dados financeiros...</div>;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Receipt className="h-6 w-6 text-primary" /> Meus pagamentos
-        </h1>
-        <p className="text-sm text-muted-foreground">Histórico de tarefas concluídas e pagamentos.</p>
+    <div className="space-y-6 max-w-5xl">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <Receipt className="h-6 w-6 text-primary" /> Meu relatório — {monthLabel}
+          </h1>
+          <p className="text-sm text-muted-foreground">Selecione um mês para conferir tarefas e pagamentos. Somente leitura.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-[180px]" />
+          <Button variant="outline" size="sm" onClick={() => setMonth(defaultMonth)}>Mês atual</Button>
+          <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-1" /> Imprimir / PDF
+          </Button>
+        </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">A receber</div>
-            <div className="text-2xl font-bold text-amber-700">{formatBRL(totalPending)}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{payments.filter((p) => p.status === "pending").length} pagamentos pendentes</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Já recebido</div>
-            <div className="text-2xl font-bold text-emerald-700">{formatBRL(totalPaid)}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{payments.filter((p) => p.status === "paid").length} pagamentos</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Tarefas concluídas</div>
-            <div className="text-2xl font-bold">{tasks.filter((t) => t.status === "done").length}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">tarefas externas</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card><CardContent className="p-4">
+          <div className="text-xs text-muted-foreground">Tarefas no mês</div>
+          <div className="text-2xl font-bold">{tasks.length}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs text-muted-foreground">A receber</div>
+          <div className="text-2xl font-bold text-amber-700">{formatBRL(totalPending)}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs text-muted-foreground">Pago</div>
+          <div className="text-2xl font-bold text-emerald-700">{formatBRL(totalPaid)}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs text-muted-foreground">Total do mês</div>
+          <div className="text-2xl font-bold">{formatBRL(totalToPay)}</div>
+          <div className="mt-1"><ClosureBadge status={closure?.status ?? "open"} /></div>
+        </CardContent></Card>
       </div>
 
-      {/* Closures */}
-      {closures.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarCheck className="h-4 w-4" /> Fechamentos mensais</CardTitle></CardHeader>
-          <CardContent className="p-0">
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Tarefas do mês</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          {tasks.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma tarefa registrada neste mês.</div>
+          ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/30">
                 <tr>
-                  <th className="p-3 text-left font-medium text-muted-foreground">Mês</th>
-                  <th className="p-3 text-right font-medium text-muted-foreground">Tarefas</th>
-                  <th className="p-3 text-right font-medium text-muted-foreground">Total</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">ID</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Tarefa</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Criada</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Concluída</th>
+                  <th className="p-3 text-right font-medium text-muted-foreground">Valor</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
-                  <th className="p-3 text-left font-medium text-muted-foreground">Pago em</th>
                 </tr>
               </thead>
               <tbody>
-                {closures.map((c) => (
-                  <tr key={c.id} className="border-t">
-                    <td className="p-3 font-medium">{monthBounds(c.reference_month).label}</td>
-                    <td className="p-3 text-right">{c.tasks_count}</td>
-                    <td className="p-3 text-right font-semibold">{formatBRL(c.total_amount)}</td>
-                    <td className="p-3">
-                      <ClosureBadge status={c.status} />
-                    </td>
-                    <td className="p-3 text-muted-foreground text-xs">{c.paid_at ? formatDateTime(c.paid_at) : "—"}</td>
-                  </tr>
-                ))}
+                {tasks.map((t) => {
+                  const pay = monthPayments.find((p) => p.task_id === t.id);
+                  const isCanc = t.status === "canceled";
+                  return (
+                    <tr key={t.id} className={cn("border-t", isCanc && "bg-rose-50/40")}>
+                      <td className="p-3 font-mono text-[10px] text-muted-foreground">
+                        <button type="button" onClick={() => { navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }} className="hover:text-foreground hover:underline">
+                          #{t.id.slice(0, 8)}
+                        </button>
+                      </td>
+                      <td className="p-3">{t.title}</td>
+                      <td className="p-3 text-muted-foreground text-xs">{t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td className="p-3 text-muted-foreground text-xs">{t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td className="p-3 text-right font-semibold">{t.service_value ? formatBRL(t.service_value) : "—"}</td>
+                      <td className="p-3">
+                        <Badge className={cn("text-xs", {
+                          "bg-rose-100 text-rose-800": isCanc,
+                          "bg-emerald-100 text-emerald-800": !isCanc && pay?.status === "paid",
+                          "bg-amber-100 text-amber-800": !isCanc && pay?.status !== "paid",
+                        })}>
+                          {isCanc ? "Cancelada" : pay?.status === "paid" ? "✓ Pago" : "⏳ Pendente"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Payments list */}
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4" /> Todos os pagamentos</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          {payments.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</div>
-          ) : (
+      {manuals.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4" /> Pagamentos avulsos do mês</CardTitle></CardHeader>
+          <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/30">
                 <tr>
@@ -224,8 +339,8 @@ function PJView({ userId }: { userId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p) => (
-                  <tr key={p.id} className="border-t hover:bg-muted/20">
+                {manuals.map((p) => (
+                  <tr key={p.id} className="border-t">
                     <td className="p-3">{p.description}</td>
                     <td className="p-3 text-right font-semibold">{formatBRL(p.amount)}</td>
                     <td className="p-3 text-muted-foreground text-xs">{formatDate(p.due_date)}</td>
@@ -233,18 +348,51 @@ function PJView({ userId }: { userId: string }) {
                       <Badge className={cn("text-xs", {
                         "bg-amber-100 text-amber-800": p.status === "pending",
                         "bg-emerald-100 text-emerald-800": p.status === "paid",
-                        "bg-slate-100 text-slate-600": p.status === "cancelled",
                       })}>
-                        {p.status === "pending" ? "Pendente" : p.status === "paid" ? "Pago" : "Cancelado"}
+                        {p.status === "pending" ? "Pendente" : "Pago"}
                       </Badge>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {closures.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarCheck className="h-4 w-4" /> Histórico de fechamentos</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Mês</th>
+                  <th className="p-3 text-right font-medium text-muted-foreground">Tarefas</th>
+                  <th className="p-3 text-right font-medium text-muted-foreground">Total</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Pago em</th>
+                  <th className="p-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {closures.map((c) => (
+                  <tr key={c.id} className={cn("border-t hover:bg-muted/20", c.reference_month === month && "bg-primary/5")}>
+                    <td className="p-3 font-medium">{monthBounds(c.reference_month).label}</td>
+                    <td className="p-3 text-right">{c.tasks_count}</td>
+                    <td className="p-3 text-right font-semibold">{formatBRL(c.total_amount)}</td>
+                    <td className="p-3"><ClosureBadge status={c.status} /></td>
+                    <td className="p-3 text-muted-foreground text-xs">{c.paid_at ? formatDateTime(c.paid_at) : "—"}</td>
+                    <td className="p-3 text-right">
+                      <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setMonth(c.reference_month)}>Ver</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
