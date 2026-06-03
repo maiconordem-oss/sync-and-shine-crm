@@ -641,8 +641,8 @@ function PJRow({
                         <div className="flex items-center justify-between pt-1 border-t border-dashed">
                           <span className="text-xs text-muted-foreground">
                             {taskPayment
-                              ? `Pagamento registrado em ${formatDate(taskPayment.due_date)}`
-                              : "Nenhum pagamento registrado para esta tarefa"}
+                              ? `Aguardando fechamento do mês (gerado em ${formatDate(taskPayment.created_at)})`
+                              : "Nenhum pagamento gerado para esta tarefa"}
                           </span>
                           {!isClosed && (
                             <button
