@@ -282,7 +282,10 @@ function PJView({ userId }: { userId: string }) {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Tarefas do mês</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Tarefas do mês</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">Clique em uma linha para ver detalhes completos da tarefa.</p>
+        </CardHeader>
         <CardContent className="p-0">
           {tasks.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma tarefa registrada neste mês.</div>
@@ -291,8 +294,9 @@ function PJView({ userId }: { userId: string }) {
               <thead className="bg-muted/30">
                 <tr>
                   <th className="p-3 text-left font-medium text-muted-foreground">ID</th>
-                  <th className="p-3 text-left font-medium text-muted-foreground">Tarefa</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Tarefa / Projeto</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Criada</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Vencimento</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Concluída</th>
                   <th className="p-3 text-right font-medium text-muted-foreground">Valor</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
@@ -302,27 +306,76 @@ function PJView({ userId }: { userId: string }) {
                 {tasks.map((t) => {
                   const pay = monthPayments.find((p) => p.task_id === t.id);
                   const isCanc = t.status === "canceled";
+                  const isExpanded = expandedTask === t.id;
                   return (
-                    <tr key={t.id} className={cn("border-t", isCanc && "bg-rose-50/40")}>
-                      <td className="p-3 font-mono text-[10px] text-muted-foreground">
-                        <button type="button" onClick={() => { navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }} className="hover:text-foreground hover:underline">
-                          #{t.id.slice(0, 8)}
-                        </button>
-                      </td>
-                      <td className="p-3">{t.title}</td>
-                      <td className="p-3 text-muted-foreground text-xs">{t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td className="p-3 text-muted-foreground text-xs">{t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td className="p-3 text-right font-semibold">{t.service_value ? formatBRL(t.service_value) : "—"}</td>
-                      <td className="p-3">
-                        <Badge className={cn("text-xs", {
-                          "bg-rose-100 text-rose-800": isCanc,
-                          "bg-emerald-100 text-emerald-800": !isCanc && pay?.status === "paid",
-                          "bg-amber-100 text-amber-800": !isCanc && pay?.status !== "paid",
-                        })}>
-                          {isCanc ? "Cancelada" : pay?.status === "paid" ? "✓ Pago" : "⏳ Pendente"}
-                        </Badge>
-                      </td>
-                    </tr>
+                    <>
+                      <tr
+                        key={t.id}
+                        className={cn("border-t cursor-pointer hover:bg-muted/30", isCanc && "bg-rose-50/40")}
+                        onClick={() => setExpandedTask(isExpanded ? null : t.id)}
+                      >
+                        <td className="p-3 font-mono text-[10px] text-muted-foreground align-top">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }}
+                            className="hover:text-foreground hover:underline"
+                          >
+                            #{t.id.slice(0, 8)}
+                          </button>
+                        </td>
+                        <td className="p-3 align-top">
+                          <div className="font-medium">{t.title}</div>
+                          {t.project_name && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: t.project_color ?? "#94a3b8" }} />
+                              {t.project_name}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-muted-foreground text-xs align-top">{t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs align-top">{t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs align-top">{t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td className="p-3 text-right font-semibold align-top">{t.service_value ? formatBRL(t.service_value) : "—"}</td>
+                        <td className="p-3 align-top">
+                          <Badge className={cn("text-xs", {
+                            "bg-rose-100 text-rose-800": isCanc,
+                            "bg-emerald-100 text-emerald-800": !isCanc && pay?.status === "paid",
+                            "bg-amber-100 text-amber-800": !isCanc && pay?.status !== "paid",
+                          })}>
+                            {isCanc ? "Cancelada" : pay?.status === "paid" ? "✓ Pago" : "⏳ Aguardando"}
+                          </Badge>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-muted/20 border-t">
+                          <td colSpan={7} className="p-4 text-xs space-y-2">
+                            {t.description && (
+                              <div>
+                                <span className="font-semibold text-muted-foreground">Descrição: </span>
+                                <span className="whitespace-pre-wrap">{t.description}</span>
+                              </div>
+                            )}
+                            {t.approved_at && (
+                              <div><span className="font-semibold text-muted-foreground">Aprovada em: </span>{new Date(t.approved_at).toLocaleString("pt-BR")}</div>
+                            )}
+                            {isCanc && t.cancel_reason && (
+                              <div className="text-rose-800"><span className="font-semibold">Motivo do cancelamento: </span>{t.cancel_reason}</div>
+                            )}
+                            {pay && (
+                              <div>
+                                <span className="font-semibold text-muted-foreground">Pagamento: </span>
+                                {pay.status === "paid"
+                                  ? `Pago em ${pay.paid_date ? new Date(pay.paid_date).toLocaleDateString("pt-BR") : "—"}`
+                                  : `Aguardando fechamento do mês (gerado em ${new Date(pay.created_at).toLocaleDateString("pt-BR")})`}
+                              </div>
+                            )}
+                            {!t.description && !t.approved_at && !pay && !t.cancel_reason && (
+                              <div className="text-muted-foreground">Sem detalhes adicionais.</div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })}
               </tbody>
