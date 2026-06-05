@@ -168,7 +168,9 @@ function PJView({ userId }: { userId: string }) {
   const manualTotal = manuals.reduce((s, p) => s + Number(p.amount), 0);
   const totalToPay = sumTasks + manualTotal;
   const closure = closures.find((c) => c.reference_month === month) ?? null;
-  const totalPaid = closure?.status === "paid" ? Number(closure.total_amount ?? 0) : 0;
+  const totalPaid = closure?.status === "paid"
+    ? totalToPay
+    : monthPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
   const totalPending = Math.max(0, totalToPay - totalPaid);
 
   const handlePrint = () => {
