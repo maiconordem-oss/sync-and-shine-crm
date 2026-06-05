@@ -1,48 +1,55 @@
-## Diagnóstico
+## Problema identificado
 
-Encontrei dois problemas principais no chat:
+A função `get_pj_tasks_for_report` no banco tem uma trava que impede o próprio PJ de ler suas tarefas:
 
-1. **Nenhum arquivo é enviado como mensagem**
-   - O upload no armazenamento acontece, mas a mensagem não entra na conversa porque o banco ainda tem uma regra antiga que só permite `kind = 'text'` ou `kind = 'nudge'`.
-   - O código tenta gravar `kind = 'attachment'`, então a criação da mensagem falha. Por isso nenhum tipo de arquivo aparece funcionando.
+```
+AND is_admin_or_manager(auth.uid())
+```
 
-2. **Status de leitura/entrega não atualiza**
-   - As colunas `delivered_at` e `read_at` existem, mas os registros recentes continuam com esses campos vazios.
-   - A atualização depende do listener global/local e pode falhar silenciosamente ou não refletir na tela se o estado local não for sincronizado após marcar como lido.
-   - O contador de não lidas também depende desse mesmo campo, então se `read_at` não atualiza, o badge não apaga.
+Como o PJ não é admin/manager, a função **sempre retorna vazio** para ele — por isso não aparece nenhuma tarefa concluída, nem do mês atual nem dos anteriores. Mesmo navegando pelo seletor de mês, vem zerado.
 
-## Plano de correção
+Além disso, hoje a tabela do PJ mostra só: ID, Título, Criada, Concluída, Valor, Status. Falta o contexto que ajuda a identificar "de qual tarefa é esse valor".
 
-### 1. Corrigir suporte real a anexos
-- Atualizar a regra do banco em `direct_messages` para permitir também `kind = 'attachment'`.
-- Manter os anexos privados no bucket atual `chat-attachments`.
-- Preservar o layout e a lógica já criada para imagem, áudio, vídeo e arquivo.
+## Solução proposta
 
-### 2. Tornar o envio de arquivo mais confiável
-- Ajustar o tratamento de erro no envio para exibir uma mensagem clara quando a criação da mensagem falhar após o upload.
-- Se o upload funcionar mas a mensagem falhar, remover o arquivo recém-enviado para evitar lixo no armazenamento.
-- Garantir que o áudio gravado continue usando `audio/webm` e que vídeos/imagens preservem o MIME correto.
+### 1. Banco (migration)
 
-### 3. Corrigir confirmação de entrega e leitura
-- Ao receber uma DM nova, marcar `delivered_at` como agora.
-- Ao abrir uma conversa, marcar as mensagens recebidas daquela pessoa como `read_at` imediatamente.
-- Atualizar o estado local depois do `UPDATE`, para o badge sumir e os ícones mudarem sem depender só do realtime.
-- Recalcular a contagem global de não lidas após mensagens serem marcadas como lidas.
+Ajustar a função `get_pj_tasks_for_report` para que:
+- Admin/manager continue vendo todos os PJs (comportamento atual).
+- O próprio PJ veja **as próprias tarefas externas** concluídas ou canceladas-com-execução do período.
+- A função passe a retornar campos extras úteis: `description`, `due_date`, `project_id`, `project_name`, `project_color`.
 
-### 4. Melhorar sincronização em tempo real
-- Manter `direct_messages` no Realtime, que já está habilitado.
-- Garantir que o listener local reflita `INSERT`, `UPDATE` e `DELETE` corretamente.
-- Revalidar o fluxo: enviada → entregue → lida.
+Filtro de período continua: tarefa entra no mês em que foi `completed_at` (ou `approved_at`).
 
-### 5. Validação final
-- Conferir no banco que mensagens com `kind = 'attachment'` estão sendo criadas.
-- Conferir que `delivered_at` e `read_at` passam a preencher.
-- Verificar que o contador de não lidas apaga quando a conversa é aberta.
+### 2. Tela do PJ (`src/routes/_app.reports.tsx` → `PJView`)
 
-## Arquivos/áreas a alterar
+- Continuar usando o seletor de mês (já existe) — agora vai funcionar de verdade para meses passados e atuais.
+- Tabela "Tarefas do mês" com colunas novas e mais claras:
+  - **#ID** (clique copia o UUID completo) — já existe
+  - **Tarefa** — título + projeto (bolinha colorida + nome) + tags se houver — facilita identificar
+  - **Descrição** — primeiras linhas, expansível ao clicar
+  - **Criada em** / **Concluída em** — já existem
+  - **Vencimento** — nova coluna
+  - **Valor** — já existe
+  - **Status** — Cancelada / ✓ Pago / ⏳ Aguardando fechamento
+- Cada linha vira clicável/expansível para ver: descrição completa, motivo de cancelamento (se houver), data de aprovação, e a "trilha" do pagamento (criado em / vencimento / status do fechamento do mês).
+- Card de resumo no topo continua igual (Tarefas / A receber / Pago / Total).
+- Botão "Imprimir / PDF" passa a incluir as novas colunas (projeto, descrição curta, vencimento) no documento gerado.
 
-- Migração do banco: regra de `kind` em `direct_messages`.
-- `src/routes/_app.chat.tsx`: envio de anexos e marcação local de leitura.
-- `src/lib/use-chat-global.ts`: entrega/contagem global de não lidas.
+### 3. Histórico acessível
 
-Não vou refazer o layout nem remover funcionalidades existentes.
+A seção "Histórico de fechamentos" já existe e permite clicar "Ver" para abrir o mês. Vou reforçar com um texto curto explicando: "Clique em 'Ver' para abrir o relatório daquele mês com todas as tarefas executadas".
+
+## O que NÃO muda
+
+- Regras de pagamento e fechamento mensal continuam iguais.
+- View do admin/manager continua igual (só ganha os campos extras na tabela quando expandir um PJ — opcional, posso manter como está se preferir).
+- PJ continua sem poder editar nada (somente leitura).
+
+## Arquivos afetados
+
+- Nova migration: ajuste de `public.get_pj_tasks_for_report` (assinatura nova com campos extras).
+- `src/routes/_app.reports.tsx`: atualizar interface `TaskRow`, query, tabela do PJ, e HTML de impressão.
+- `src/integrations/supabase/types.ts`: regenerado automaticamente após a migration.
+
+Posso seguir?

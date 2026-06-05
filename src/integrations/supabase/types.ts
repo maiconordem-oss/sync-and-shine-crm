@@ -979,7 +979,12 @@ export type Database = {
           canceled_at: string
           completed_at: string
           created_at: string
+          description: string
+          due_date: string
           id: string
+          project_color: string
+          project_id: string
+          project_name: string
           service_value: number
           status: string
           task_type: string
