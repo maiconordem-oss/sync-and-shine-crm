@@ -777,11 +777,11 @@ function PJRow({
               <div className="space-y-2">
                 {row.tasks.map((t) => {
                   const taskPayment = row.payments.find((p) => p.task_id === t.id && p.status !== "cancelled");
-                  const isPaidTask = taskPayment?.status === "paid";
-                  const isPendingTask = !isPaidTask;
                   const isCanceled = t.status === "canceled";
+                  const isPaidTask = taskPayment?.status === "paid" || (isPaid && !isCanceled);
+                  const isPendingTask = !isPaidTask;
                   const canceledAfterDone = isCanceled && !!t.completed_at;
-                  const doneNoPayment = t.status === "done" && !taskPayment && Number(t.service_value ?? 0) > 0;
+                  const doneNoPayment = t.status === "done" && !taskPayment && !isPaid && Number(t.service_value ?? 0) > 0;
                   return (
                     <div key={t.id} className={cn(
                       "rounded-lg border bg-background p-3 space-y-2",
