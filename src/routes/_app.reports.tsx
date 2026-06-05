@@ -128,6 +128,7 @@ function PJView({ userId }: { userId: string }) {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [profile, setProfile] = useState<PJProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
 
   const { startISO, endISO, startDate, endDate, label: monthLabel } = monthBounds(month);
 
