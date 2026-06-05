@@ -366,15 +366,22 @@ function PJView({ userId }: { userId: string }) {
                             {isCanc && t.cancel_reason && (
                               <div className="text-rose-800"><span className="font-semibold">Motivo do cancelamento: </span>{t.cancel_reason}</div>
                             )}
-                            {pay && (
+                            {pay ? (
                               <div>
                                 <span className="font-semibold text-muted-foreground">Pagamento: </span>
                                 {pay.status === "paid"
                                   ? `Pago em ${pay.paid_date ? new Date(pay.paid_date).toLocaleDateString("pt-BR") : "—"}`
+                                  : monthPaid
+                                  ? `Pago no fechamento do mês em ${closure?.paid_at ? new Date(closure.paid_at).toLocaleDateString("pt-BR") : "—"}`
                                   : `Aguardando fechamento do mês (gerado em ${new Date(pay.created_at).toLocaleDateString("pt-BR")})`}
                               </div>
-                            )}
-                            {!t.description && !t.approved_at && !pay && !t.cancel_reason && (
+                            ) : monthPaid && !isCanc ? (
+                              <div>
+                                <span className="font-semibold text-muted-foreground">Pagamento: </span>
+                                {`Incluído no fechamento do mês${closure?.paid_at ? ` em ${new Date(closure.paid_at).toLocaleDateString("pt-BR")}` : ""}`}
+                              </div>
+                            ) : null}
+                            {!t.description && !t.approved_at && !pay && !t.cancel_reason && !monthPaid && (
                               <div className="text-muted-foreground">Sem detalhes adicionais.</div>
                             )}
                           </td>
