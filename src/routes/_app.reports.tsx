@@ -198,15 +198,18 @@ function PJView({ userId }: { userId: string }) {
 
       <h2>Tarefas do mês</h2>
       <table>
-        <thead><tr><th>ID</th><th>Tarefa</th><th>Criada</th><th>Concluída</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-        <tbody>${tasks.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+        <thead><tr><th>ID</th><th>Tarefa / Projeto</th><th>Criada</th><th>Vencimento</th><th>Concluída</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+        <tbody>${tasks.length === 0 ? '<tr><td colspan="7" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
           const pay = monthPayments.find((p) => p.task_id === t.id);
           const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".", ",") : "—";
           const cre = t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—";
+          const due = t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—";
           const con = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
           const isCanc = t.status === "canceled";
-          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
-          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td>${t.title}</td><td>${cre}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
+          const proj = t.project_name ? `<div style="font-size:10px;color:#666;margin-top:2px">● ${t.project_name}</div>` : "";
+          const desc = t.description ? `<div style="font-size:10px;color:#888;margin-top:2px">${String(t.description).slice(0, 140)}${String(t.description).length > 140 ? "…" : ""}</div>` : "";
+          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
         }).join("")}</tbody>
       </table>
 
