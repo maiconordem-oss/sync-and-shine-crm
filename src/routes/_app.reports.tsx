@@ -206,7 +206,9 @@ function PJView({ userId }: { userId: string }) {
           const due = t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—";
           const con = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
           const isCanc = t.status === "canceled";
-          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
+          const monthPaidPrint = closure?.status === "paid";
+          const taskPaidPrint = pay?.status === "paid" || (monthPaidPrint && !isCanc);
+          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : taskPaidPrint ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
           const proj = t.project_name ? `<div style="font-size:10px;color:#666;margin-top:2px">● ${t.project_name}</div>` : "";
           const desc = t.description ? `<div style="font-size:10px;color:#888;margin-top:2px">${String(t.description).slice(0, 140)}${String(t.description).length > 140 ? "…" : ""}</div>` : "";
           return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
