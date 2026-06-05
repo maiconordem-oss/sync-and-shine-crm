@@ -310,6 +310,8 @@ function PJView({ userId }: { userId: string }) {
                 {tasks.map((t) => {
                   const pay = monthPayments.find((p) => p.task_id === t.id);
                   const isCanc = t.status === "canceled";
+                  const monthPaid = closure?.status === "paid";
+                  const taskPaid = pay?.status === "paid" || (monthPaid && !isCanc);
                   const isExpanded = expandedTask === t.id;
                   return (
                     <Fragment key={t.id}>
@@ -342,10 +344,10 @@ function PJView({ userId }: { userId: string }) {
                         <td className="p-3 align-top">
                           <Badge className={cn("text-xs", {
                             "bg-rose-100 text-rose-800": isCanc,
-                            "bg-emerald-100 text-emerald-800": !isCanc && pay?.status === "paid",
-                            "bg-amber-100 text-amber-800": !isCanc && pay?.status !== "paid",
+                            "bg-emerald-100 text-emerald-800": !isCanc && taskPaid,
+                            "bg-amber-100 text-amber-800": !isCanc && !taskPaid,
                           })}>
-                            {isCanc ? "Cancelada" : pay?.status === "paid" ? "✓ Pago" : "⏳ Aguardando"}
+                            {isCanc ? "Cancelada" : taskPaid ? "✓ Pago" : "⏳ Aguardando"}
                           </Badge>
                         </td>
                       </tr>
