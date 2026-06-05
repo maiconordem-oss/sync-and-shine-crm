@@ -168,7 +168,9 @@ function PJView({ userId }: { userId: string }) {
   const manualTotal = manuals.reduce((s, p) => s + Number(p.amount), 0);
   const totalToPay = sumTasks + manualTotal;
   const closure = closures.find((c) => c.reference_month === month) ?? null;
-  const totalPaid = closure?.status === "paid" ? Number(closure.total_amount ?? 0) : 0;
+  const totalPaid = closure?.status === "paid"
+    ? totalToPay
+    : monthPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
   const totalPending = Math.max(0, totalToPay - totalPaid);
 
   const handlePrint = () => {
@@ -206,7 +208,9 @@ function PJView({ userId }: { userId: string }) {
           const due = t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—";
           const con = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
           const isCanc = t.status === "canceled";
-          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
+          const monthPaidPrint = closure?.status === "paid";
+          const taskPaidPrint = pay?.status === "paid" || (monthPaidPrint && !isCanc);
+          const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : taskPaidPrint ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
           const proj = t.project_name ? `<div style="font-size:10px;color:#666;margin-top:2px">● ${t.project_name}</div>` : "";
           const desc = t.description ? `<div style="font-size:10px;color:#888;margin-top:2px">${String(t.description).slice(0, 140)}${String(t.description).length > 140 ? "…" : ""}</div>` : "";
           return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
@@ -310,6 +314,8 @@ function PJView({ userId }: { userId: string }) {
                 {tasks.map((t) => {
                   const pay = monthPayments.find((p) => p.task_id === t.id);
                   const isCanc = t.status === "canceled";
+                  const monthPaid = closure?.status === "paid";
+                  const taskPaid = pay?.status === "paid" || (monthPaid && !isCanc);
                   const isExpanded = expandedTask === t.id;
                   return (
                     <Fragment key={t.id}>
@@ -342,10 +348,10 @@ function PJView({ userId }: { userId: string }) {
                         <td className="p-3 align-top">
                           <Badge className={cn("text-xs", {
                             "bg-rose-100 text-rose-800": isCanc,
-                            "bg-emerald-100 text-emerald-800": !isCanc && pay?.status === "paid",
-                            "bg-amber-100 text-amber-800": !isCanc && pay?.status !== "paid",
+                            "bg-emerald-100 text-emerald-800": !isCanc && taskPaid,
+                            "bg-amber-100 text-amber-800": !isCanc && !taskPaid,
                           })}>
-                            {isCanc ? "Cancelada" : pay?.status === "paid" ? "✓ Pago" : "⏳ Aguardando"}
+                            {isCanc ? "Cancelada" : taskPaid ? "✓ Pago" : "⏳ Aguardando"}
                           </Badge>
                         </td>
                       </tr>
@@ -364,15 +370,22 @@ function PJView({ userId }: { userId: string }) {
                             {isCanc && t.cancel_reason && (
                               <div className="text-rose-800"><span className="font-semibold">Motivo do cancelamento: </span>{t.cancel_reason}</div>
                             )}
-                            {pay && (
+                            {pay ? (
                               <div>
                                 <span className="font-semibold text-muted-foreground">Pagamento: </span>
                                 {pay.status === "paid"
                                   ? `Pago em ${pay.paid_date ? new Date(pay.paid_date).toLocaleDateString("pt-BR") : "—"}`
+                                  : monthPaid
+                                  ? `Pago no fechamento do mês em ${closure?.paid_at ? new Date(closure.paid_at).toLocaleDateString("pt-BR") : "—"}`
                                   : `Aguardando fechamento do mês (gerado em ${new Date(pay.created_at).toLocaleDateString("pt-BR")})`}
                               </div>
-                            )}
-                            {!t.description && !t.approved_at && !pay && !t.cancel_reason && (
+                            ) : monthPaid && !isCanc ? (
+                              <div>
+                                <span className="font-semibold text-muted-foreground">Pagamento: </span>
+                                {`Incluído no fechamento do mês${closure?.paid_at ? ` em ${new Date(closure.paid_at).toLocaleDateString("pt-BR")}` : ""}`}
+                              </div>
+                            ) : null}
+                            {!t.description && !t.approved_at && !pay && !t.cancel_reason && !monthPaid && (
                               <div className="text-muted-foreground">Sem detalhes adicionais.</div>
                             )}
                           </td>
@@ -764,11 +777,11 @@ function PJRow({
               <div className="space-y-2">
                 {row.tasks.map((t) => {
                   const taskPayment = row.payments.find((p) => p.task_id === t.id && p.status !== "cancelled");
-                  const isPaidTask = taskPayment?.status === "paid";
-                  const isPendingTask = !isPaidTask;
                   const isCanceled = t.status === "canceled";
+                  const isPaidTask = taskPayment?.status === "paid" || (isPaid && !isCanceled);
+                  const isPendingTask = !isPaidTask;
                   const canceledAfterDone = isCanceled && !!t.completed_at;
-                  const doneNoPayment = t.status === "done" && !taskPayment && Number(t.service_value ?? 0) > 0;
+                  const doneNoPayment = t.status === "done" && !taskPayment && !isPaid && Number(t.service_value ?? 0) > 0;
                   return (
                     <div key={t.id} className={cn(
                       "rounded-lg border bg-background p-3 space-y-2",
