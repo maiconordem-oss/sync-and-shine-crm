@@ -44,14 +44,20 @@ interface PaymentRow {
 interface TaskRow {
   id: string;
   title: string;
+  description?: string | null;
   assignee_id: string | null;
   service_value: number | null;
   task_type: "internal" | "external";
   status: string;
   completed_at: string | null;
+  approved_at?: string | null;
   canceled_at?: string | null;
   cancel_reason?: string | null;
   created_at?: string | null;
+  due_date?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
+  project_color?: string | null;
 }
 
 interface Closure {
