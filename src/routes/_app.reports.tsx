@@ -309,9 +309,8 @@ function PJView({ userId }: { userId: string }) {
                   const isCanc = t.status === "canceled";
                   const isExpanded = expandedTask === t.id;
                   return (
-                    <>
+                    <Fragment key={t.id}>
                       <tr
-                        key={t.id}
                         className={cn("border-t cursor-pointer hover:bg-muted/30", isCanc && "bg-rose-50/40")}
                         onClick={() => setExpandedTask(isExpanded ? null : t.id)}
                       >
