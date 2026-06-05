@@ -375,7 +375,7 @@ function PJView({ userId }: { userId: string }) {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
