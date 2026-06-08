@@ -2048,3 +2048,13 @@ function TaskSidePanel({
   );
 }
 
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+      {label}
+      <button onClick={onRemove} className="hover:text-foreground" aria-label="Remover filtro">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
