@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   GripVertical, Plus, KanbanSquare, List as ListIcon, Search,
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
@@ -140,11 +141,48 @@ function TasksPage() {
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState<"all" | "internal" | "external">("all");
+  const [filterDue, setFilterDue] = useState<"all" | "overdue" | "today" | "week" | "none">("all");
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
+
+  // Persistência local dos filtros
+  const FILTERS_KEY = "tasks.filters.v1";
+  const filtersHydrated = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTERS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (typeof s.search === "string") setSearch(s.search);
+        if (s.filterProject) setFilterProject(s.filterProject);
+        if (s.filterAssignee) setFilterAssignee(s.filterAssignee);
+        if (s.filterPriority) setFilterPriority(s.filterPriority);
+        if (s.filterStatus) setFilterStatus(s.filterStatus);
+        if (s.filterType) setFilterType(s.filterType);
+        if (s.filterDue) setFilterDue(s.filterDue);
+        if (Array.isArray(s.filterTags)) setFilterTags(s.filterTags);
+        if (typeof s.createdFrom === "string") setCreatedFrom(s.createdFrom);
+        if (typeof s.createdTo === "string") setCreatedTo(s.createdTo);
+      }
+    } catch { /* noop */ }
+    filtersHydrated.current = true;
+  }, []);
+  useEffect(() => {
+    if (!filtersHydrated.current) return;
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        search, filterProject, filterAssignee, filterPriority, filterStatus,
+        filterType, filterDue, filterTags, createdFrom, createdTo,
+      }));
+    } catch { /* noop */ }
+  }, [search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
 
   // Create form
 
@@ -168,14 +206,56 @@ function TasksPage() {
     void load();
   }, [loading, isAuthenticated, load]);
 
-  const filtered = useMemo(() => tasks.filter((t) => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterProject !== "all" && t.project_id !== filterProject) return false;
-    if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
-    if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
-    return true;
-  }), [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus]);
+  // Pool de tags disponíveis
+  const tagPool = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach((t) => (t.tags ?? []).forEach((tag) => { if (tag) set.add(tag); }));
+    return Array.from(set).sort();
+  }, [tasks]);
+
+  const filtered = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
+    const cFrom = createdFrom ? new Date(createdFrom) : null;
+    const cTo = createdTo ? new Date(createdTo + "T23:59:59") : null;
+    const q = search.toLowerCase();
+
+    return tasks.filter((t) => {
+      if (q) {
+        const inTitle = t.title.toLowerCase().includes(q);
+        const inDesc = (t.description ?? "").toLowerCase().includes(q);
+        const inTags = (t.tags ?? []).some((tg) => tg.toLowerCase().includes(q));
+        if (!inTitle && !inDesc && !inTags) return false;
+      }
+      if (filterProject !== "all" && t.project_id !== filterProject) return false;
+      if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
+      if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterType !== "all" && t.task_type !== filterType) return false;
+
+      if (filterDue !== "all") {
+        const d = t.due_date ? new Date(t.due_date) : null;
+        if (filterDue === "none" && d) return false;
+        if (filterDue === "overdue" && (!d || d >= today || t.status === "done")) return false;
+        if (filterDue === "today" && (!d || d.toDateString() !== today.toDateString())) return false;
+        if (filterDue === "week" && (!d || d < today || d > weekEnd)) return false;
+      }
+
+      if (filterTags.length > 0) {
+        const tt = t.tags ?? [];
+        if (!filterTags.every((tag) => tt.includes(tag))) return false;
+      }
+
+      if (cFrom || cTo) {
+        const created = new Date(t.created_at);
+        if (cFrom && created < cFrom) return false;
+        if (cTo && created > cTo) return false;
+      }
+
+      return true;
+    });
+  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
@@ -183,7 +263,26 @@ function TasksPage() {
 
   const overdueCount = filtered.filter((t) => isOverdue(t.due_date) && t.status !== "done").length;
   const inProgressCount = filtered.filter((t) => t.status === "in_progress").length;
-  const hasActiveFilter = filterProject !== "all" || filterAssignee !== "all" || filterPriority !== "all" || filterStatus !== "all";
+  const hasActiveFilter =
+    filterProject !== "all" || filterAssignee !== "all" || filterPriority !== "all" ||
+    filterStatus !== "all" || filterType !== "all" || filterDue !== "all" ||
+    filterTags.length > 0 || !!createdFrom || !!createdTo;
+
+  const clearAllFilters = () => {
+    setFilterProject("all"); setFilterAssignee("all"); setFilterPriority("all");
+    setFilterStatus("all"); setFilterType("all"); setFilterDue("all");
+    setFilterTags([]); setCreatedFrom(""); setCreatedTo(""); setSearch("");
+  };
+
+  const toggleTag = (tag: string) => {
+    setFilterTags((prev) => prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]);
+  };
+
+  const dueLabel = (v: string) => ({
+    all: "Vencimento", overdue: "Atrasadas", today: "Hoje", week: "Esta semana", none: "Sem prazo",
+  } as Record<string, string>)[v] ?? v;
+  const typeLabel = (v: string) => ({ all: "Tipo", internal: "Interna", external: "Externa" } as Record<string, string>)[v] ?? v;
+
 
   const quickStatusChange = async (taskId: string, newSt: TaskStatus) => {
     const task = tasks.find((t) => t.id === taskId);
@@ -313,7 +412,7 @@ function TasksPage() {
           Filtros {hasActiveFilter && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary inline-block" />}
         </Button>
         {(hasActiveFilter || search) && (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterProject("all"); setFilterAssignee("all"); setFilterPriority("all"); setFilterStatus("all"); setSearch(""); }}>
+          <Button variant="ghost" size="sm" className="h-9" onClick={clearAllFilters}>
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}
@@ -346,8 +445,65 @@ function TasksPage() {
               {Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todos os tipos</SelectItem>
+              <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
+              <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterDue} onValueChange={(v) => setFilterDue(v as typeof filterDue)}>
+            <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue placeholder="Vencimento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Qualquer prazo</SelectItem>
+              <SelectItem value="overdue" className="text-xs">Atrasadas</SelectItem>
+              <SelectItem value="today" className="text-xs">Hoje</SelectItem>
+              <SelectItem value="week" className="text-xs">Esta semana</SelectItem>
+              <SelectItem value="none" className="text-xs">Sem prazo</SelectItem>
+            </SelectContent>
+          </Select>
+          {tagPool.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs">
+                  <Tag className="h-3.5 w-3.5 mr-1" />
+                  Tags {filterTags.length > 0 && <span className="ml-1 px-1.5 rounded bg-primary text-primary-foreground text-[10px]">{filterTags.length}</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2 max-h-72 overflow-auto">
+                {tagPool.map((tag) => (
+                  <label key={tag} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted cursor-pointer text-xs">
+                    <Checkbox checked={filterTags.includes(tag)} onCheckedChange={() => toggleTag(tag)} />
+                    <span>{tag}</span>
+                  </label>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-muted-foreground">Criada de</span>
+            <Input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} className="h-8 text-xs w-[140px]" />
+            <span className="text-[11px] text-muted-foreground">até</span>
+            <Input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} className="h-8 text-xs w-[140px]" />
+          </div>
         </div>
       )}
+
+      {hasActiveFilter && (
+        <div className="flex flex-wrap gap-1.5 items-center text-xs">
+          {filterStatus !== "all" && <FilterChip label={`Status: ${STATUS_LABEL[filterStatus] ?? filterStatus}`} onRemove={() => setFilterStatus("all")} />}
+          {filterProject !== "all" && <FilterChip label={`Projeto: ${projectById(filterProject)?.name ?? "—"}`} onRemove={() => setFilterProject("all")} />}
+          {filterAssignee !== "all" && <FilterChip label={`Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
+          {filterPriority !== "all" && <FilterChip label={`Prioridade: ${PRIORITY_LABEL[filterPriority] ?? filterPriority}`} onRemove={() => setFilterPriority("all")} />}
+          {filterType !== "all" && <FilterChip label={typeLabel(filterType)} onRemove={() => setFilterType("all")} />}
+          {filterDue !== "all" && <FilterChip label={dueLabel(filterDue)} onRemove={() => setFilterDue("all")} />}
+          {filterTags.map((tag) => <FilterChip key={tag} label={`#${tag}`} onRemove={() => toggleTag(tag)} />)}
+          {createdFrom && <FilterChip label={`De ${createdFrom}`} onRemove={() => setCreatedFrom("")} />}
+          {createdTo && <FilterChip label={`Até ${createdTo}`} onRemove={() => setCreatedTo("")} />}
+        </div>
+      )}
+
 
       {/* Board + side panel */}
       <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
@@ -1892,3 +2048,13 @@ function TaskSidePanel({
   );
 }
 
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+      {label}
+      <button onClick={onRemove} className="hover:text-foreground" aria-label="Remover filtro">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
