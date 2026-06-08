@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,10 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Edit3, Trash2, Repeat } from "lucide-react";
+import { Plus, Edit3, Trash2, Repeat, Search, Filter, X } from "lucide-react";
 import { PRIORITY_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
+
 
 export const Route = createFileRoute("/_app/recurring-tasks")({
   component: RecurringTasksPage,
