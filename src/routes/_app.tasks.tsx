@@ -412,7 +412,7 @@ function TasksPage() {
           Filtros {hasActiveFilter && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary inline-block" />}
         </Button>
         {(hasActiveFilter || search) && (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterProject("all"); setFilterAssignee("all"); setFilterPriority("all"); setFilterStatus("all"); setSearch(""); }}>
+          <Button variant="ghost" size="sm" className="h-9" onClick={clearAllFilters}>
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}
@@ -445,8 +445,65 @@ function TasksPage() {
               {Object.entries(PRIORITY_LABEL).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={filterType} onValueChange={(v) => setFilterType(v as typeof filterType)}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todos os tipos</SelectItem>
+              <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
+              <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterDue} onValueChange={(v) => setFilterDue(v as typeof filterDue)}>
+            <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue placeholder="Vencimento" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Qualquer prazo</SelectItem>
+              <SelectItem value="overdue" className="text-xs">Atrasadas</SelectItem>
+              <SelectItem value="today" className="text-xs">Hoje</SelectItem>
+              <SelectItem value="week" className="text-xs">Esta semana</SelectItem>
+              <SelectItem value="none" className="text-xs">Sem prazo</SelectItem>
+            </SelectContent>
+          </Select>
+          {tagPool.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs">
+                  <Tag className="h-3.5 w-3.5 mr-1" />
+                  Tags {filterTags.length > 0 && <span className="ml-1 px-1.5 rounded bg-primary text-primary-foreground text-[10px]">{filterTags.length}</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2 max-h-72 overflow-auto">
+                {tagPool.map((tag) => (
+                  <label key={tag} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted cursor-pointer text-xs">
+                    <Checkbox checked={filterTags.includes(tag)} onCheckedChange={() => toggleTag(tag)} />
+                    <span>{tag}</span>
+                  </label>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-muted-foreground">Criada de</span>
+            <Input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} className="h-8 text-xs w-[140px]" />
+            <span className="text-[11px] text-muted-foreground">até</span>
+            <Input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} className="h-8 text-xs w-[140px]" />
+          </div>
         </div>
       )}
+
+      {hasActiveFilter && (
+        <div className="flex flex-wrap gap-1.5 items-center text-xs">
+          {filterStatus !== "all" && <FilterChip label={`Status: ${STATUS_LABEL[filterStatus] ?? filterStatus}`} onRemove={() => setFilterStatus("all")} />}
+          {filterProject !== "all" && <FilterChip label={`Projeto: ${projectById(filterProject)?.name ?? "—"}`} onRemove={() => setFilterProject("all")} />}
+          {filterAssignee !== "all" && <FilterChip label={`Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
+          {filterPriority !== "all" && <FilterChip label={`Prioridade: ${PRIORITY_LABEL[filterPriority] ?? filterPriority}`} onRemove={() => setFilterPriority("all")} />}
+          {filterType !== "all" && <FilterChip label={typeLabel(filterType)} onRemove={() => setFilterType("all")} />}
+          {filterDue !== "all" && <FilterChip label={dueLabel(filterDue)} onRemove={() => setFilterDue("all")} />}
+          {filterTags.map((tag) => <FilterChip key={tag} label={`#${tag}`} onRemove={() => toggleTag(tag)} />)}
+          {createdFrom && <FilterChip label={`De ${createdFrom}`} onRemove={() => setCreatedFrom("")} />}
+          {createdTo && <FilterChip label={`Até ${createdTo}`} onRemove={() => setCreatedTo("")} />}
+        </div>
+      )}
+
 
       {/* Board + side panel */}
       <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
