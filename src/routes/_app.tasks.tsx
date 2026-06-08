@@ -140,11 +140,48 @@ function TasksPage() {
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState<"all" | "internal" | "external">("all");
+  const [filterDue, setFilterDue] = useState<"all" | "overdue" | "today" | "week" | "none">("all");
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
+
+  // Persistência local dos filtros
+  const FILTERS_KEY = "tasks.filters.v1";
+  const filtersHydrated = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTERS_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (typeof s.search === "string") setSearch(s.search);
+        if (s.filterProject) setFilterProject(s.filterProject);
+        if (s.filterAssignee) setFilterAssignee(s.filterAssignee);
+        if (s.filterPriority) setFilterPriority(s.filterPriority);
+        if (s.filterStatus) setFilterStatus(s.filterStatus);
+        if (s.filterType) setFilterType(s.filterType);
+        if (s.filterDue) setFilterDue(s.filterDue);
+        if (Array.isArray(s.filterTags)) setFilterTags(s.filterTags);
+        if (typeof s.createdFrom === "string") setCreatedFrom(s.createdFrom);
+        if (typeof s.createdTo === "string") setCreatedTo(s.createdTo);
+      }
+    } catch { /* noop */ }
+    filtersHydrated.current = true;
+  }, []);
+  useEffect(() => {
+    if (!filtersHydrated.current) return;
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({
+        search, filterProject, filterAssignee, filterPriority, filterStatus,
+        filterType, filterDue, filterTags, createdFrom, createdTo,
+      }));
+    } catch { /* noop */ }
+  }, [search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
 
   // Create form
 
@@ -168,14 +205,56 @@ function TasksPage() {
     void load();
   }, [loading, isAuthenticated, load]);
 
-  const filtered = useMemo(() => tasks.filter((t) => {
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterProject !== "all" && t.project_id !== filterProject) return false;
-    if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
-    if (filterPriority !== "all" && t.priority !== filterPriority) return false;
-    if (filterStatus !== "all" && t.status !== filterStatus) return false;
-    return true;
-  }), [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus]);
+  // Pool de tags disponíveis
+  const tagPool = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach((t) => (t.tags ?? []).forEach((tag) => { if (tag) set.add(tag); }));
+    return Array.from(set).sort();
+  }, [tasks]);
+
+  const filtered = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
+    const cFrom = createdFrom ? new Date(createdFrom) : null;
+    const cTo = createdTo ? new Date(createdTo + "T23:59:59") : null;
+    const q = search.toLowerCase();
+
+    return tasks.filter((t) => {
+      if (q) {
+        const inTitle = t.title.toLowerCase().includes(q);
+        const inDesc = (t.description ?? "").toLowerCase().includes(q);
+        const inTags = (t.tags ?? []).some((tg) => tg.toLowerCase().includes(q));
+        if (!inTitle && !inDesc && !inTags) return false;
+      }
+      if (filterProject !== "all" && t.project_id !== filterProject) return false;
+      if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
+      if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterType !== "all" && t.task_type !== filterType) return false;
+
+      if (filterDue !== "all") {
+        const d = t.due_date ? new Date(t.due_date) : null;
+        if (filterDue === "none" && d) return false;
+        if (filterDue === "overdue" && (!d || d >= today || t.status === "done")) return false;
+        if (filterDue === "today" && (!d || d.toDateString() !== today.toDateString())) return false;
+        if (filterDue === "week" && (!d || d < today || d > weekEnd)) return false;
+      }
+
+      if (filterTags.length > 0) {
+        const tt = t.tags ?? [];
+        if (!filterTags.every((tag) => tt.includes(tag))) return false;
+      }
+
+      if (cFrom || cTo) {
+        const created = new Date(t.created_at);
+        if (cFrom && created < cFrom) return false;
+        if (cTo && created > cTo) return false;
+      }
+
+      return true;
+    });
+  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
@@ -183,7 +262,26 @@ function TasksPage() {
 
   const overdueCount = filtered.filter((t) => isOverdue(t.due_date) && t.status !== "done").length;
   const inProgressCount = filtered.filter((t) => t.status === "in_progress").length;
-  const hasActiveFilter = filterProject !== "all" || filterAssignee !== "all" || filterPriority !== "all" || filterStatus !== "all";
+  const hasActiveFilter =
+    filterProject !== "all" || filterAssignee !== "all" || filterPriority !== "all" ||
+    filterStatus !== "all" || filterType !== "all" || filterDue !== "all" ||
+    filterTags.length > 0 || !!createdFrom || !!createdTo;
+
+  const clearAllFilters = () => {
+    setFilterProject("all"); setFilterAssignee("all"); setFilterPriority("all");
+    setFilterStatus("all"); setFilterType("all"); setFilterDue("all");
+    setFilterTags([]); setCreatedFrom(""); setCreatedTo(""); setSearch("");
+  };
+
+  const toggleTag = (tag: string) => {
+    setFilterTags((prev) => prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]);
+  };
+
+  const dueLabel = (v: string) => ({
+    all: "Vencimento", overdue: "Atrasadas", today: "Hoje", week: "Esta semana", none: "Sem prazo",
+  } as Record<string, string>)[v] ?? v;
+  const typeLabel = (v: string) => ({ all: "Tipo", internal: "Interna", external: "Externa" } as Record<string, string>)[v] ?? v;
+
 
   const quickStatusChange = async (taskId: string, newSt: TaskStatus) => {
     const task = tasks.find((t) => t.id === taskId);
