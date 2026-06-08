@@ -69,6 +69,15 @@ function RecurringTasksPage() {
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [open, setOpen] = useState(false);
 
+  // Filtros
+  const [search, setSearch] = useState("");
+  const [fFreq, setFFreq] = useState<"all" | "monthly" | "weekly">("all");
+  const [fStatus, setFStatus] = useState<"all" | "active" | "inactive">("all");
+  const [fAssignee, setFAssignee] = useState("all");
+  const [fProject, setFProject] = useState("all");
+  const [fType, setFType] = useState<"all" | "internal" | "external">("all");
+  const [showFilters, setShowFilters] = useState(false);
+
   const load = async () => {
     setLoading(true);
     const [r, p, pr] = await Promise.all([
@@ -84,6 +93,28 @@ function RecurringTasksPage() {
   };
 
   useEffect(() => { void load(); }, []);
+
+  const hasActiveFilter = fFreq !== "all" || fStatus !== "all" || fAssignee !== "all" || fProject !== "all" || fType !== "all";
+
+  const filtered = useMemo(() => items.filter((it) => {
+    if (search) {
+      const q = search.toLowerCase();
+      const hit = it.title.toLowerCase().includes(q) || (it.description ?? "").toLowerCase().includes(q);
+      if (!hit) return false;
+    }
+    if (fFreq !== "all" && it.frequency !== fFreq) return false;
+    if (fStatus === "active" && !it.active) return false;
+    if (fStatus === "inactive" && it.active) return false;
+    if (fAssignee !== "all" && it.assignee_id !== fAssignee) return false;
+    if (fProject !== "all" && it.project_id !== fProject) return false;
+    if (fType !== "all" && it.task_type !== fType) return false;
+    return true;
+  }), [items, search, fFreq, fStatus, fAssignee, fProject, fType]);
+
+  const clearFilters = () => {
+    setSearch(""); setFFreq("all"); setFStatus("all");
+    setFAssignee("all"); setFProject("all"); setFType("all");
+  };
 
   if (!isManagerOrAdmin) {
     return <div className="text-muted-foreground">Apenas Admin e Gestor podem gerenciar tarefas recorrentes.</div>;
@@ -108,12 +139,77 @@ function RecurringTasksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Repeat className="h-6 w-6" /> Tarefas recorrentes</h1>
-          <p className="text-sm text-muted-foreground">Modelos que geram tarefas automaticamente — mensalmente ou em dias específicos da semana.</p>
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} de {items.length} modelos · geram tarefas automaticamente (mensal ou em dias da semana).
+          </p>
         </div>
         <Button onClick={() => { setEditing(null); setOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova recorrência
         </Button>
       </div>
+
+      {/* Busca & filtros */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-[200px] flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por título ou descrição..." className="pl-9 h-9" />
+          {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}
+        </div>
+        <Button variant="outline" size="sm"
+          className={cn("h-9", showFilters && "border-primary text-primary")}
+          onClick={() => setShowFilters((f) => !f)}>
+          <Filter className="h-4 w-4 mr-1" />
+          Filtros {hasActiveFilter && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary inline-block" />}
+        </Button>
+        {(hasActiveFilter || search) && (
+          <Button variant="ghost" size="sm" className="h-9" onClick={clearFilters}>
+            <X className="h-4 w-4 mr-1" /> Limpar
+          </Button>
+        )}
+      </div>
+
+      {showFilters && (
+        <div className="flex flex-wrap gap-2 p-3 rounded-lg border bg-muted/20">
+          <Select value={fFreq} onValueChange={(v) => setFFreq(v as typeof fFreq)}>
+            <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todas frequências</SelectItem>
+              <SelectItem value="monthly" className="text-xs">Mensal</SelectItem>
+              <SelectItem value="weekly" className="text-xs">Semanal</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fStatus} onValueChange={(v) => setFStatus(v as typeof fStatus)}>
+            <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todas</SelectItem>
+              <SelectItem value="active" className="text-xs">Ativas</SelectItem>
+              <SelectItem value="inactive" className="text-xs">Inativas</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={fAssignee} onValueChange={setFAssignee}>
+            <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todos responsáveis</SelectItem>
+              {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fProject} onValueChange={setFProject}>
+            <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Projeto" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todos projetos</SelectItem>
+              {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fType} onValueChange={(v) => setFType(v as typeof fType)}>
+            <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Todos os tipos</SelectItem>
+              <SelectItem value="internal" className="text-xs">Interna (CLT)</SelectItem>
+              <SelectItem value="external" className="text-xs">Externa (PJ)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="border rounded-lg bg-card overflow-auto">
         <Table>
@@ -131,10 +227,12 @@ function RecurringTasksPage() {
           </TableHeader>
           <TableBody>
             {loading && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>}
-            {!loading && items.length === 0 && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma tarefa recorrente cadastrada.</TableCell></TableRow>
+            {!loading && filtered.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                {items.length === 0 ? "Nenhuma tarefa recorrente cadastrada." : "Nenhum modelo corresponde aos filtros."}
+              </TableCell></TableRow>
             )}
-            {items.map((it) => {
+            {filtered.map((it) => {
               const ass = profiles.find((p) => p.id === it.assignee_id);
               const pj = projects.find((p) => p.id === it.project_id);
               const lastGen = it.frequency === "monthly" ? it.last_generated_month : it.last_generated_date;
