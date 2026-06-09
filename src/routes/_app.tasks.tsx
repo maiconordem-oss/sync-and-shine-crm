@@ -151,6 +151,7 @@ function TasksPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
 
   // Persistência local dos filtros
