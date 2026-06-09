@@ -595,6 +595,14 @@ function TasksPage() {
         onCreated={() => void load()}
       />
 
+      <ImportTasksDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projects={projects}
+        profiles={profiles}
+        onImported={() => void load()}
+      />
+
       <RemoveTaskDialog
         task={removeTask}
         onClose={() => setRemoveTask(null)}
