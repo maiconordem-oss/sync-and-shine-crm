@@ -54,9 +54,9 @@ const STATUS_MAP: Record<string, PreparedItem["status"]> = {
   nova: "new", novo: "new", new: "new",
   "em andamento": "in_progress", andamento: "in_progress", in_progress: "in_progress",
   aguardando: "waiting", waiting: "waiting",
-  concluida: "done", concluída: "done", feita: "done", done: "done",
+  concluida: "done", feita: "done", done: "done",
   adiada: "deferred", deferred: "deferred",
-  "em revisao": "in_review", "em revisão": "in_review", revisao: "in_review", in_review: "in_review",
+  "em revisao": "in_review", revisao: "in_review", in_review: "in_review",
   cancelada: "canceled", cancelado: "canceled", canceled: "canceled",
 };
 
