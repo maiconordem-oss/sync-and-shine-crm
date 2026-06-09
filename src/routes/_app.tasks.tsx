@@ -391,9 +391,14 @@ function TasksPage() {
             </Button>
           </div>
           {canCreateTasks && can("tasks.create") && (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Nova tarefa
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4 mr-1" /> Importar tarefas
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Nova tarefa
+              </Button>
+            </>
           )}
         </div>
       </div>
