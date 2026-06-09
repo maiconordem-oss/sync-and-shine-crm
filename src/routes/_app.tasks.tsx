@@ -16,7 +16,7 @@ import {
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
   FolderKanban, AlertTriangle, Edit3, ExternalLink, Filter,
   MoreHorizontal, ChevronRight, MessageSquare, ClipboardCheck,
-  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle, CalendarDays, ChevronLeft,
+  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle, CalendarDays, ChevronLeft, Upload,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDate, formatDateTime, isOverdue, formatBRL } from "@/lib/format";
@@ -31,6 +31,7 @@ import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
 import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attachments";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
+import { ImportTasksDialog } from "@/components/tasks/import-tasks-dialog";
 import { TaskLinks } from "@/components/tasks/task-links";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
 import { TemplatePicker, type TaskTemplate } from "@/components/tasks/task-templates";
@@ -150,6 +151,7 @@ function TasksPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [panelTaskId, setPanelTaskId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
 
   // Persistência local dos filtros
@@ -389,9 +391,14 @@ function TasksPage() {
             </Button>
           </div>
           {canCreateTasks && can("tasks.create") && (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" /> Nova tarefa
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="h-4 w-4 mr-1" /> Importar tarefas
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Nova tarefa
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -586,6 +593,14 @@ function TasksPage() {
         projects={projects}
         profiles={profiles}
         onCreated={() => void load()}
+      />
+
+      <ImportTasksDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projects={projects}
+        profiles={profiles}
+        onImported={() => void load()}
       />
 
       <RemoveTaskDialog
