@@ -16,7 +16,7 @@ import {
   X, Send, Trash2, Play, Square, Copy, Tag, Calendar, User,
   FolderKanban, AlertTriangle, Edit3, ExternalLink, Filter,
   MoreHorizontal, ChevronRight, MessageSquare, ClipboardCheck,
-  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle, CalendarDays, ChevronLeft,
+  Paperclip, Clock, ClipboardList, CheckCircle2, XCircle, CalendarDays, ChevronLeft, Upload,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDate, formatDateTime, isOverdue, formatBRL } from "@/lib/format";
