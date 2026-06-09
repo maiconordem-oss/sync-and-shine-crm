@@ -45,7 +45,7 @@ interface PreparedItem {
 
 const PRIORITY_MAP: Record<string, PreparedItem["priority"]> = {
   baixa: "low", low: "low",
-  media: "medium", média: "medium", medium: "medium", "média": "medium",
+  media: "medium", medium: "medium",
   alta: "high", high: "high",
   urgente: "urgent", urgent: "urgent",
 };
