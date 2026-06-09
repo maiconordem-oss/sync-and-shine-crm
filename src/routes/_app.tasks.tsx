@@ -31,6 +31,7 @@ import { useSound } from "@/lib/use-sound";
 import { toast } from "sonner";
 import { TaskAttachments, useTaskThumbnail } from "@/components/tasks/task-attachments";
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
+import { ImportTasksDialog } from "@/components/tasks/import-tasks-dialog";
 import { TaskLinks } from "@/components/tasks/task-links";
 import { TaskBodyImages } from "@/components/tasks/task-body-images";
 import { TemplatePicker, type TaskTemplate } from "@/components/tasks/task-templates";
