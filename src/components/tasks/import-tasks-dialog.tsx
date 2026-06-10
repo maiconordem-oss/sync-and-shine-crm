@@ -25,6 +25,8 @@ interface RawItem {
   valor?: string | number;
   prioridade?: string;
   status?: string;
+  link?: string;
+  links?: string[];
 }
 
 interface PreparedItem {
@@ -40,7 +42,15 @@ interface PreparedItem {
   priority: "low" | "medium" | "high" | "urgent";
   status: "new" | "in_progress" | "waiting" | "done" | "deferred" | "in_review" | "canceled";
   service_value_label: string;
+  links: string[];
   warnings: string[];
+}
+
+function normalizeLink(u: string): string {
+  const s = u.trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  return "https://" + s;
 }
 
 const PRIORITY_MAP: Record<string, PreparedItem["priority"]> = {
@@ -134,6 +144,11 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
       const priority = PRIORITY_MAP[norm(r.prioridade || "")] || "medium";
       const status = STATUS_MAP[norm(r.status || "")] || "new";
 
+      const linksRaw: string[] = [];
+      if (Array.isArray(r.links)) linksRaw.push(...r.links.map(String));
+      if (r.link) linksRaw.push(String(r.link));
+      const links = linksRaw.map(normalizeLink).filter(Boolean);
+
       return {
         raw: r,
         title: (r.titulo || "").trim(),
@@ -149,6 +164,7 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
         service_value_label: service_value !== null
           ? service_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
           : "—",
+        links,
         warnings,
       };
     });
@@ -202,7 +218,7 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
     for (let i = 0; i < toCreate.length; i++) {
       const it = toCreate[i];
       setProgress({ current: i + 1, total: toCreate.length });
-      const { error } = await supabase.from("tasks").insert({
+      const { data: created, error } = await supabase.from("tasks").insert({
         title: it.title,
         description: it.description,
         assignee_id: it.assignee_id,
@@ -212,12 +228,23 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
         priority: it.priority,
         status: it.status,
         created_by: user?.id ?? null,
-      } as any);
+      } as any).select("id").single();
       if (error) {
         fail++;
         console.error("Import task error:", error, it);
       } else {
         ok++;
+        if (it.links.length && created?.id) {
+          const rows = it.links.map((url) => ({
+            task_id: created.id,
+            url,
+            title: null,
+            added_by: user?.id ?? null,
+          }));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: linkErr } = await (supabase.from("task_links" as never) as any).insert(rows);
+          if (linkErr) console.error("Import link error:", linkErr, it);
+        }
       }
     }
     setCreatedCount(ok);
@@ -298,8 +325,12 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
   "tipo": "Externa (PJ)",
   "valor": "18.00",
   "prioridade": "Media",
-  "status": "Nova"
-}]`}</pre>
+  "status": "Nova",
+  "link": "https://produto.mercadolivre.com.br/MLB-123"
+}]
+
+// "link" pode ser uma string ou "links" pode ser um array de URLs.
+// Se a tarefa não tiver imagem anexa, o preview do primeiro link será usado como capa.`}</pre>
               </details>
             </div>
           )}
@@ -335,6 +366,11 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
                         <td className="p-2 text-muted-foreground">{i + 1}</td>
                         <td className="p-2">
                           <div className="font-medium">{it.title}</div>
+                          {it.links.length > 0 && (
+                            <div className="text-xs text-blue-600 truncate max-w-xs mt-0.5">
+                              🔗 {it.links[0]}{it.links.length > 1 ? ` (+${it.links.length - 1})` : ""}
+                            </div>
+                          )}
                           {it.warnings.length > 0 && (
                             <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
                               <AlertCircle className="h-3 w-3" />
