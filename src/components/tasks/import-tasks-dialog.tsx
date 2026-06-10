@@ -325,8 +325,12 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
   "tipo": "Externa (PJ)",
   "valor": "18.00",
   "prioridade": "Media",
-  "status": "Nova"
-}]`}</pre>
+  "status": "Nova",
+  "link": "https://produto.mercadolivre.com.br/MLB-123"
+}]
+
+// "link" pode ser uma string ou "links" pode ser um array de URLs.
+// Se a tarefa não tiver imagem anexa, o preview do primeiro link será usado como capa.`}</pre>
               </details>
             </div>
           )}
