@@ -186,27 +186,32 @@ export function TaskAttachments({ taskId, createdBy, canUpload: canUploadProp }:
 }
 
 // Hook para thumbnail no kanban card
-export function useTaskThumbnail(taskId: string | null) {
+// Retorna candidatos em ordem; o consumidor faz fallback via onError
+export function useTaskThumbnail(taskId: string | null): string | null {
   const [thumb, setThumb] = useState<string | null>(null);
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId) { setThumb(null); return; }
     let canceled = false;
-    supabase.from("attachments").select("storage_path,mime_type").eq("task_id", taskId)
-      .like("mime_type", "image/%").order("created_at", { ascending: true }).limit(1).maybeSingle()
-      .then(async ({ data }) => {
-        if (canceled) return;
-        if (data) {
-          const { data: s } = await supabase.storage.from("attachments").createSignedUrl(data.storage_path, 3600 * 4);
-          if (s?.signedUrl) setThumb(s.signedUrl);
-          return;
-        }
-        // Sem imagem anexa: tentar preview do primeiro link
-        const { data: link } = await supabase.from("task_links" as never).select("url").eq("task_id", taskId).order("created_at", { ascending: true }).limit(1).maybeSingle() as { data: { url: string } | null };
-        if (canceled) return;
-        if (link?.url) {
-          setThumb(`https://image.thum.io/get/width/400/crop/800/${encodeURIComponent(link.url)}`);
-        }
-      });
+    setThumb(null);
+    (async () => {
+      const { data } = await supabase.from("attachments").select("storage_path,mime_type").eq("task_id", taskId)
+        .like("mime_type", "image/%").order("created_at", { ascending: true }).limit(1).maybeSingle();
+      if (canceled) return;
+      if (data) {
+        const { data: s } = await supabase.storage.from("attachments").createSignedUrl(data.storage_path, 3600 * 4);
+        if (!canceled && s?.signedUrl) setThumb(s.signedUrl);
+        return;
+      }
+      const { data: link } = await supabase.from("task_links" as never)
+        .select("url").eq("task_id", taskId).order("created_at", { ascending: true })
+        .limit(1).maybeSingle() as { data: { url: string } | null };
+      if (canceled) return;
+      if (link?.url) {
+        // microlink.io: screenshot grátis sem chave, retorna imagem direta via embed
+        const u = encodeURIComponent(link.url);
+        setThumb(`https://api.microlink.io/?url=${u}&screenshot=true&meta=false&embed=screenshot.url`);
+      }
+    })();
     return () => { canceled = true; };
   }, [taskId]);
   return thumb;
