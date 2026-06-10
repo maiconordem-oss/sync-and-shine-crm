@@ -218,7 +218,7 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
     for (let i = 0; i < toCreate.length; i++) {
       const it = toCreate[i];
       setProgress({ current: i + 1, total: toCreate.length });
-      const { error } = await supabase.from("tasks").insert({
+      const { data: created, error } = await supabase.from("tasks").insert({
         title: it.title,
         description: it.description,
         assignee_id: it.assignee_id,
@@ -228,12 +228,23 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
         priority: it.priority,
         status: it.status,
         created_by: user?.id ?? null,
-      } as any);
+      } as any).select("id").single();
       if (error) {
         fail++;
         console.error("Import task error:", error, it);
       } else {
         ok++;
+        if (it.links.length && created?.id) {
+          const rows = it.links.map((url) => ({
+            task_id: created.id,
+            url,
+            title: null,
+            added_by: user?.id ?? null,
+          }));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: linkErr } = await (supabase.from("task_links" as never) as any).insert(rows);
+          if (linkErr) console.error("Import link error:", linkErr, it);
+        }
       }
     }
     setCreatedCount(ok);
