@@ -144,6 +144,11 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
       const priority = PRIORITY_MAP[norm(r.prioridade || "")] || "medium";
       const status = STATUS_MAP[norm(r.status || "")] || "new";
 
+      const linksRaw: string[] = [];
+      if (Array.isArray(r.links)) linksRaw.push(...r.links.map(String));
+      if (r.link) linksRaw.push(String(r.link));
+      const links = linksRaw.map(normalizeLink).filter(Boolean);
+
       return {
         raw: r,
         title: (r.titulo || "").trim(),
@@ -159,6 +164,7 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
         service_value_label: service_value !== null
           ? service_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
           : "—",
+        links,
         warnings,
       };
     });
