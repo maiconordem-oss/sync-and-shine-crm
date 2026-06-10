@@ -25,6 +25,8 @@ interface RawItem {
   valor?: string | number;
   prioridade?: string;
   status?: string;
+  link?: string;
+  links?: string[];
 }
 
 interface PreparedItem {
@@ -40,7 +42,15 @@ interface PreparedItem {
   priority: "low" | "medium" | "high" | "urgent";
   status: "new" | "in_progress" | "waiting" | "done" | "deferred" | "in_review" | "canceled";
   service_value_label: string;
+  links: string[];
   warnings: string[];
+}
+
+function normalizeLink(u: string): string {
+  const s = u.trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  return "https://" + s;
 }
 
 const PRIORITY_MAP: Record<string, PreparedItem["priority"]> = {
