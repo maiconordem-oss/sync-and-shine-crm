@@ -366,6 +366,11 @@ export function ImportTasksDialog({ open, onOpenChange, projects, profiles, onIm
                         <td className="p-2 text-muted-foreground">{i + 1}</td>
                         <td className="p-2">
                           <div className="font-medium">{it.title}</div>
+                          {it.links.length > 0 && (
+                            <div className="text-xs text-blue-600 truncate max-w-xs mt-0.5">
+                              🔗 {it.links[0]}{it.links.length > 1 ? ` (+${it.links.length - 1})` : ""}
+                            </div>
+                          )}
                           {it.warnings.length > 0 && (
                             <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
                               <AlertCircle className="h-3 w-3" />
