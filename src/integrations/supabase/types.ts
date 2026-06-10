@@ -730,6 +730,41 @@ export type Database = {
           },
         ]
       }
+      task_links: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          id: string
+          task_id: string
+          title: string | null
+          url: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          task_id: string
+          title?: string | null
+          url: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          id?: string
+          task_id?: string
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_links_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_templates: {
         Row: {
           checklist_items: string[] | null
