@@ -207,7 +207,25 @@ export function useTaskThumbnail(taskId: string | null): string | null {
         .limit(1).maybeSingle() as { data: { url: string } | null };
       if (canceled) return;
       if (link?.url) {
-        // microlink.io: screenshot grátis sem chave, retorna imagem direta via embed
+        // microlink.io: busca metadados (og:image) — grátis sem chave, funciona com sites com anti-bot
+        try {
+          const u = encodeURIComponent(link.url);
+          const res = await fetch(`https://api.microlink.io/?url=${u}&audio=false&video=false`);
+          const json = await res.json();
+          if (canceled) return;
+          const img =
+            json?.data?.image?.url ||
+            json?.data?.logo?.url ||
+            null;
+          if (img) {
+            setThumb(img);
+            return;
+          }
+        } catch {
+          // ignore — fallback abaixo
+        }
+        if (canceled) return;
+        // Fallback: screenshot embed (caso og:image não exista)
         const u = encodeURIComponent(link.url);
         setThumb(`https://api.microlink.io/?url=${u}&screenshot=true&meta=false&embed=screenshot.url`);
       }
