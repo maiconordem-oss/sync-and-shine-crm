@@ -1,35 +1,28 @@
-## Objetivo
-Adicionar/melhorar filtros de listagem em **Tarefas recorrentes** (`/recurring-tasks`) e em **Tarefas** (`/tasks`). Sem mudanças de lógica de negócio — apenas UI/filtragem no frontend.
+## Problema
 
-## Tarefas recorrentes (`src/routes/_app.recurring-tasks.tsx`)
-Hoje a lista não tem nenhum filtro. Adicionar barra de busca + filtros:
+O preview do link (quando não há imagem anexada) usa `api.microlink.io` em modo screenshot. Para sites como Mercado Livre, esse modo:
 
-- **Busca** por título/descrição
-- **Frequência**: Todas / Mensal / Semanal
-- **Status**: Todas / Ativas / Inativas
-- **Responsável**: Todos / lista de profiles
-- **Projeto**: Todos / lista de projetos
-- **Tipo**: Todos / Interna (CLT) / Externa (PJ)
-- Botão **Limpar filtros** quando algum estiver ativo
-- Contador "X de Y modelos" no header
+- Exige plano pago do microlink para screenshot real (sem chave costuma falhar/retornar placeholder).
+- É bloqueado por anti-bot do ML, então a imagem nunca renderiza.
 
-Layout: mesmo padrão da página de Tarefas — barra com busca + botão "Filtros" que expande os selects em grid.
+## Solução
 
-## Tarefas (`src/routes/_app.tasks.tsx`)
-Já existe busca + filtros (status, projeto, responsável, prioridade). Acrescentar:
+Usar a API pública do microlink (gratuita, sem chave) para extrair o **og:image** da página em vez de tirar screenshot. Praticamente todo produto do ML tem `og:image` com a foto do anúncio, então o preview vai mostrar a foto real do produto.
 
-- **Tipo**: Todas / Interna / Externa
-- **Vencimento**: Todas / Atrasadas / Hoje / Esta semana / Sem prazo
-- **Tags**: multi-select com as tags existentes nas tarefas carregadas
-- **Criadas em**: range de datas (de/até)
-- Busca passa a considerar **título + descrição + tags**
-- Salvar o estado dos filtros no `localStorage` para persistir entre navegações (chave por página)
-- Chip visual mostrando filtros ativos com X para remover individualmente
+Fluxo do hook `useTaskThumbnail` em `src/components/tasks/task-attachments.tsx`:
 
-## Fora do escopo
-- Geração de recorrência, regras (feriados, datas de fim), ações em massa, novas colunas — ficam para outra rodada.
-- Card "Pagamentos pendentes" da imagem — ignorado conforme confirmado.
+1. Se a tarefa tem anexo de imagem → usa o anexo (como hoje).
+2. Senão, se tem link:
+   - Faz `fetch("https://api.microlink.io/?url=<link>")` (JSON, sem chave).
+   - Lê `data.image.url` (og:image) ou `data.logo.url` como fallback.
+   - Se nada disso existir, cai para o screenshot embed atual como último recurso.
+3. Cancelamento mantido com flag `canceled` para evitar setState após unmount.
 
-## Arquivos a editar
-- `src/routes/_app.recurring-tasks.tsx`
-- `src/routes/_app.tasks.tsx`
+## Arquivos
+
+- `src/components/tasks/task-attachments.tsx` — atualizar o hook `useTaskThumbnail` para buscar og:image via microlink JSON antes de tentar screenshot.
+
+## Notas técnicas
+
+- A API pública do microlink tem rate limit baixo (~50 req/dia por IP). Para um CRM interno isso costuma bastar; se virar gargalo, o próximo passo seria cachear o resultado em uma coluna nova `task_links.preview_image_url` populada via server function. Fora do escopo desta correção.
+- Sem mudanças de schema, sem migrations.
