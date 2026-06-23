@@ -336,22 +336,32 @@ function ChatPage() {
       }
       if (!text.trim()) return;
       if (active.kind === "room") {
-        const { error } = await supabase.from("chat_messages").insert([{
+        const { data, error } = await supabase.from("chat_messages").insert([{
           author_id: user.id,
           content: text.trim(),
           reply_to_id: replyTo?.id ?? null,
-        }]);
+        }]).select("*").single();
         if (error) toast.error(error.message);
+        else if (data) {
+          const m = data as ChatMessage;
+          setRoomMsgs((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
+        }
       } else {
-        const { error } = await supabase.from("direct_messages").insert([{
+        const { data, error } = await supabase.from("direct_messages").insert([{
           sender_id: user.id,
           recipient_id: active.userId,
           content: text.trim(),
           kind: "text",
           reply_to_id: replyTo?.id ?? null,
-        }]);
+        }]).select("*").single();
         if (error) toast.error(error.message);
-        else play("dm_sent");
+        else {
+          play("dm_sent");
+          if (data) {
+            const m = data as DirectMessage;
+            setDms((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
+          }
+        }
       }
       setText("");
       setReplyTo(null);
