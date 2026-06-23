@@ -152,12 +152,24 @@ function ChatPage() {
     const channel = supabase
       .channel("chat_room_rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
-        setRoomMsgs((prev) => [...prev, payload.new as ChatMessage]);
+        const m = payload.new as ChatMessage;
+        setRoomMsgs((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, (payload) => {
         setRoomMsgs((prev) => prev.filter((m) => m.id !== (payload.old as ChatMessage).id));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void supabase
+            .from("chat_messages")
+            .select("*")
+            .order("created_at", { ascending: true })
+            .limit(200)
+            .then(({ data }) => {
+              if (data) setRoomMsgs(data as ChatMessage[]);
+            });
+        }
+      });
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
@@ -189,7 +201,19 @@ function ChatPage() {
         if (p.to !== user.id) return;
         setTypingPeers((prev) => ({ ...prev, [p.from]: Date.now() }));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void supabase
+            .from("direct_messages")
+            .select("*")
+            .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+            .order("created_at", { ascending: true })
+            .limit(500)
+            .then(({ data }) => {
+              if (data) setDms(data as DirectMessage[]);
+            });
+        }
+      });
     return () => { void supabase.removeChannel(channel); };
   }, [user]);
 
@@ -335,22 +359,32 @@ function ChatPage() {
       }
       if (!text.trim()) return;
       if (active.kind === "room") {
-        const { error } = await supabase.from("chat_messages").insert([{
+        const { data, error } = await supabase.from("chat_messages").insert([{
           author_id: user.id,
           content: text.trim(),
           reply_to_id: replyTo?.id ?? null,
-        }]);
+        }]).select("*").single();
         if (error) toast.error(error.message);
+        else if (data) {
+          const m = data as ChatMessage;
+          setRoomMsgs((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
+        }
       } else {
-        const { error } = await supabase.from("direct_messages").insert([{
+        const { data, error } = await supabase.from("direct_messages").insert([{
           sender_id: user.id,
           recipient_id: active.userId,
           content: text.trim(),
           kind: "text",
           reply_to_id: replyTo?.id ?? null,
-        }]);
+        }]).select("*").single();
         if (error) toast.error(error.message);
-        else play("dm_sent");
+        else {
+          play("dm_sent");
+          if (data) {
+            const m = data as DirectMessage;
+            setDms((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
+          }
+        }
       }
       setText("");
       setReplyTo(null);
