@@ -152,7 +152,8 @@ function ChatPage() {
     const channel = supabase
       .channel("chat_room_rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
-        setRoomMsgs((prev) => [...prev, payload.new as ChatMessage]);
+        const m = payload.new as ChatMessage;
+        setRoomMsgs((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, (payload) => {
         setRoomMsgs((prev) => prev.filter((m) => m.id !== (payload.old as ChatMessage).id));
