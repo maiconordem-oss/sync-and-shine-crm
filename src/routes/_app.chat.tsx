@@ -201,7 +201,19 @@ function ChatPage() {
         if (p.to !== user.id) return;
         setTypingPeers((prev) => ({ ...prev, [p.from]: Date.now() }));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void supabase
+            .from("direct_messages")
+            .select("*")
+            .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+            .order("created_at", { ascending: true })
+            .limit(500)
+            .then(({ data }) => {
+              if (data) setDms(data as DirectMessage[]);
+            });
+        }
+      });
     return () => { void supabase.removeChannel(channel); };
   }, [user]);
 
