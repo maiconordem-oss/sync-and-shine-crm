@@ -158,7 +158,18 @@ function ChatPage() {
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, (payload) => {
         setRoomMsgs((prev) => prev.filter((m) => m.id !== (payload.old as ChatMessage).id));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          void supabase
+            .from("chat_messages")
+            .select("*")
+            .order("created_at", { ascending: true })
+            .limit(200)
+            .then(({ data }) => {
+              if (data) setRoomMsgs(data as ChatMessage[]);
+            });
+        }
+      });
     return () => { void supabase.removeChannel(channel); };
   }, []);
 
