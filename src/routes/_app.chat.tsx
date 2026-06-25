@@ -126,96 +126,215 @@ function ChatPage() {
     setPendingPaste((p) => { if (p) URL.revokeObjectURL(p.previewUrl); return null; });
   }, [active]);
 
-  // Initial load
+  // Helpers de merge (preservam mensagens otimistas e deduplicam por id)
+  const mergeRoom = useCallback((incoming: ChatMessage[]) => {
+    setRoomMsgs((prev) => {
+      const map = new Map<string, ChatMessage>();
+      for (const m of prev) map.set(m.id, m);
+      for (const m of incoming) map.set(m.id, m);
+      return Array.from(map.values()).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    });
+  }, []);
+  const mergeDms = useCallback((incoming: DirectMessage[]) => {
+    setDms((prev) => {
+      const map = new Map<string, DirectMessage>();
+      for (const m of prev) map.set(m.id, m);
+      for (const m of incoming) map.set(m.id, m);
+      return Array.from(map.values()).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    });
+  }, []);
+
+  // Carga inicial: somente profiles, sala (200) e presença. DMs são por conversa.
   useEffect(() => {
     if (!user) return;
     void (async () => {
-      const [{ data: profs }, { data: rmsgs }, { data: dmsgs }, { data: pres }] = await Promise.all([
+      const [{ data: profs }, { data: rmsgs }, { data: pres }] = await Promise.all([
         supabase.from("profiles").select("id,full_name,avatar_url"),
         supabase.from("chat_messages").select("*").order("created_at", { ascending: true }).limit(200),
-        supabase.from("direct_messages").select("*")
-          .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-          .order("created_at", { ascending: true }).limit(500),
         supabase.from("user_presence").select("*"),
       ]);
       setProfiles((profs ?? []) as ProfileLite[]);
-      setRoomMsgs((rmsgs ?? []) as ChatMessage[]);
-      setDms((dmsgs ?? []) as DirectMessage[]);
+      mergeRoom((rmsgs ?? []) as ChatMessage[]);
       const pmap: Record<string, PresenceRow> = {};
       ((pres ?? []) as PresenceRow[]).forEach((p) => { pmap[p.user_id] = p; });
       setPresence(pmap);
     })();
-  }, [user]);
+  }, [user, mergeRoom]);
 
-  // Realtime: room messages
-  useEffect(() => {
-    const channel = supabase
-      .channel("chat_room_rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
-        const m = payload.new as ChatMessage;
-        setRoomMsgs((prev) => (prev.find((x) => x.id === m.id) ? prev : [...prev, m]));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, (payload) => {
-        setRoomMsgs((prev) => prev.filter((m) => m.id !== (payload.old as ChatMessage).id));
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void supabase
-            .from("chat_messages")
-            .select("*")
-            .order("created_at", { ascending: true })
-            .limit(200)
-            .then(({ data }) => {
-              if (data) setRoomMsgs(data as ChatMessage[]);
-            });
-        }
-      });
-    return () => { void supabase.removeChannel(channel); };
-  }, []);
-
-  // Realtime: DMs locais (apenas estado da página; sons/toasts/tremida são globais)
+  // Pré-carrega últimas DMs (para badges/última mensagem na sidebar)
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel("dm_local_rt_" + user.id)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (payload) => {
-        const m = payload.new as DirectMessage;
-        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
-        setDms((prev) => prev.find((x) => x.id === m.id) ? prev : [...prev, m]);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "direct_messages" }, (payload) => {
-        const m = payload.new as DirectMessage;
-        setDms((prev) => prev.map((x) => (x.id === m.id ? m : x)));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "direct_messages" }, (payload) => {
-        const m = payload.old as DirectMessage;
-        setDms((prev) => prev.filter((x) => x.id !== m.id));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, (payload) => {
-        const row = (payload.new ?? payload.old) as PresenceRow;
-        if (!row) return;
-        setPresence((prev) => ({ ...prev, [row.user_id]: row }));
-      })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const p = payload as { from: string; to: string };
-        if (p.to !== user.id) return;
-        setTypingPeers((prev) => ({ ...prev, [p.from]: Date.now() }));
-      })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void supabase
-            .from("direct_messages")
-            .select("*")
-            .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-            .order("created_at", { ascending: true })
-            .limit(500)
-            .then(({ data }) => {
-              if (data) setDms(data as DirectMessage[]);
-            });
-        }
+    void supabase
+      .from("direct_messages")
+      .select("*")
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .then(({ data }) => {
+        if (data) mergeDms(data as DirectMessage[]);
       });
-    return () => { void supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, mergeDms]);
+
+  // Carga sob demanda da conversa aberta (200 mensagens do par)
+  useEffect(() => {
+    if (!user || active.kind !== "dm") return;
+    const peer = active.userId;
+    void supabase
+      .from("direct_messages")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${user.id},recipient_id.eq.${peer}),and(sender_id.eq.${peer},recipient_id.eq.${user.id})`,
+      )
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (data) mergeDms(data as DirectMessage[]);
+      });
+  }, [user, active, mergeDms]);
+
+  // Refetch ao voltar foco / reconectar
+  useEffect(() => {
+    if (!user) return;
+    const refetch = () => {
+      void supabase
+        .from("chat_messages")
+        .select("*")
+        .order("created_at", { ascending: true })
+        .limit(200)
+        .then(({ data }) => { if (data) mergeRoom(data as ChatMessage[]); });
+      if (active.kind === "dm") {
+        const peer = active.userId;
+        void supabase
+          .from("direct_messages")
+          .select("*")
+          .or(
+            `and(sender_id.eq.${user.id},recipient_id.eq.${peer}),and(sender_id.eq.${peer},recipient_id.eq.${user.id})`,
+          )
+          .order("created_at", { ascending: true })
+          .limit(200)
+          .then(({ data }) => { if (data) mergeDms(data as DirectMessage[]); });
+      } else {
+        void supabase
+          .from("direct_messages")
+          .select("*")
+          .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+          .order("created_at", { ascending: false })
+          .limit(200)
+          .then(({ data }) => { if (data) mergeDms(data as DirectMessage[]); });
+      }
+    };
+    const onVis = () => { if (!document.hidden) refetch(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", refetch);
+    window.addEventListener("focus", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", refetch);
+      window.removeEventListener("focus", onVis);
+    };
+  }, [user, active, mergeRoom, mergeDms]);
+
+  // Realtime: room messages (merge — nunca substitui o array)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const connect = () => {
+      channel = supabase
+        .channel("chat_room_rt_" + user.id)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (payload) => {
+          mergeRoom([payload.new as ChatMessage]);
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_messages" }, (payload) => {
+          mergeRoom([payload.new as ChatMessage]);
+        })
+        .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_messages" }, (payload) => {
+          setRoomMsgs((prev) => prev.filter((m) => m.id !== (payload.old as ChatMessage).id));
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void supabase
+              .from("chat_messages")
+              .select("*")
+              .order("created_at", { ascending: true })
+              .limit(200)
+              .then(({ data }) => { if (data) mergeRoom(data as ChatMessage[]); });
+          } else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") && !cancelled) {
+            if (channel) void supabase.removeChannel(channel);
+            channel = null;
+            retryTimer = window.setTimeout(connect, 2000);
+          }
+        });
+    };
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [user, mergeRoom]);
+
+  // Realtime: DMs locais (merge + recuperação de canal)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const connect = () => {
+      channel = supabase
+        .channel("dm_local_rt_" + user.id)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (payload) => {
+          const m = payload.new as DirectMessage;
+          if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+          mergeDms([m]);
+        })
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "direct_messages" }, (payload) => {
+          const m = payload.new as DirectMessage;
+          if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+          mergeDms([m]);
+        })
+        .on("postgres_changes", { event: "DELETE", schema: "public", table: "direct_messages" }, (payload) => {
+          const m = payload.old as DirectMessage;
+          setDms((prev) => prev.filter((x) => x.id !== m.id));
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "user_presence" }, (payload) => {
+          const row = (payload.new ?? payload.old) as PresenceRow;
+          if (!row) return;
+          setPresence((prev) => ({ ...prev, [row.user_id]: row }));
+        })
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          const p = payload as { from: string; to: string };
+          if (p.to !== user.id) return;
+          setTypingPeers((prev) => ({ ...prev, [p.from]: Date.now() }));
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void supabase
+              .from("direct_messages")
+              .select("*")
+              .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+              .order("created_at", { ascending: false })
+              .limit(200)
+              .then(({ data }) => { if (data) mergeDms(data as DirectMessage[]); });
+          } else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") && !cancelled) {
+            if (channel) void supabase.removeChannel(channel);
+            channel = null;
+            retryTimer = window.setTimeout(connect, 2000);
+          }
+        });
+    };
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [user, mergeDms]);
 
   // Clean stale typing indicators
   useEffect(() => {
