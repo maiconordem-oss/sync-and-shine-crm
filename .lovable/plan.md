@@ -1,28 +1,31 @@
-## Problema
+## Problema encontrado
 
-O preview do link (quando não há imagem anexada) usa `api.microlink.io` em modo screenshot. Para sites como Mercado Livre, esse modo:
+As mensagens estão gravadas no banco, mas a tela do chat carrega apenas as **primeiras** mensagens por ordem crescente:
 
-- Exige plano pago do microlink para screenshot real (sem chave costuma falhar/retornar placeholder).
-- É bloqueado por anti-bot do ML, então a imagem nunca renderiza.
+- `direct_messages` tem mais de 700 mensagens salvas.
+- O código fazia `.order("created_at", { ascending: true }).limit(500)`.
+- Isso trazia as 500 mensagens mais antigas, deixando as mensagens recentes fora do estado local.
+- Quando a outra pessoa recebia em tempo real, via a mensagem. Ao atualizar a página, a busca inicial voltava para mensagens antigas e a mensagem recente “sumia” da tela.
 
-## Solução
+## Melhorias necessárias
 
-Usar a API pública do microlink (gratuita, sem chave) para extrair o **og:image** da página em vez de tirar screenshot. Praticamente todo produto do ML tem `og:image` com a foto do anúncio, então o preview vai mostrar a foto real do produto.
+Atualizar `src/routes/_app.chat.tsx` para:
 
-Fluxo do hook `useTaskThumbnail` em `src/components/tasks/task-attachments.tsx`:
+1. Buscar mensagens pela data **decrescente** no banco, com limite, e depois ordenar no frontend em ordem cronológica para exibição.
+2. Aumentar o histórico geral de DMs carregado inicialmente de 500 para 1000.
+3. Criar funções de sincronização reutilizáveis:
+   - `loadRoomMessages`
+   - `loadDirectMessages`
+   - `loadDirectConversation`
+4. Ao abrir uma conversa individual, buscar o histórico específico daquela conversa separadamente, garantindo que conversas antigas/recentes não fiquem cortadas pelo limite global.
+5. Fazer merge por `id` nas mensagens recebidas por realtime e re-sincronizações, evitando duplicadas e evitando sobrescrever mensagens já recebidas localmente.
+6. Manter o re-sync quando o canal realtime assinar novamente, mas usando merge em vez de substituir o estado por uma janela incompleta.
+7. Adicionar logs/toasts de erro se a sincronização falhar, para não falhar silenciosamente.
 
-1. Se a tarefa tem anexo de imagem → usa o anexo (como hoje).
-2. Senão, se tem link:
-   - Faz `fetch("https://api.microlink.io/?url=<link>")` (JSON, sem chave).
-   - Lê `data.image.url` (og:image) ou `data.logo.url` como fallback.
-   - Se nada disso existir, cai para o screenshot embed atual como último recurso.
-3. Cancelamento mantido com flag `canceled` para evitar setState após unmount.
+## Arquivo a alterar
 
-## Arquivos
+- `src/routes/_app.chat.tsx`
 
-- `src/components/tasks/task-attachments.tsx` — atualizar o hook `useTaskThumbnail` para buscar og:image via microlink JSON antes de tentar screenshot.
+## Resultado esperado
 
-## Notas técnicas
-
-- A API pública do microlink tem rate limit baixo (~50 req/dia por IP). Para um CRM interno isso costuma bastar; se virar gargalo, o próximo passo seria cachear o resultado em uma coluna nova `task_links.preview_image_url` populada via server function. Fora do escopo desta correção.
-- Sem mudanças de schema, sem migrations.
+Após atualizar a página, o chat passa a mostrar as mensagens mais recentes e o histórico correto da conversa aberta, em vez de parecer que mensagens enviadas desapareceram.
