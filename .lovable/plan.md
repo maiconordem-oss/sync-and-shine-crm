@@ -1,31 +1,39 @@
-## Problema encontrado
+## Correções no Chat — persistência das mensagens
 
-As mensagens estão gravadas no banco, mas a tela do chat carrega apenas as **primeiras** mensagens por ordem crescente:
+**Problema:** Após dar refresh, mensagens recebidas somem da tela mesmo estando salvas no banco.
 
-- `direct_messages` tem mais de 700 mensagens salvas.
-- O código fazia `.order("created_at", { ascending: true }).limit(500)`.
-- Isso trazia as 500 mensagens mais antigas, deixando as mensagens recentes fora do estado local.
-- Quando a outra pessoa recebia em tempo real, via a mensagem. Ao atualizar a página, a busca inicial voltava para mensagens antigas e a mensagem recente “sumia” da tela.
+**Causa raiz identificada:**
+1. O `useEffect` de carga inicial roda em paralelo com o `useEffect` do realtime. O callback `SUBSCRIBED` do realtime sobrescreve `roomMsgs` com `LIMIT 200` ordenado ASC — mas a carga inicial faz o mesmo. Se uma INSERT chegar entre os dois fetches, o segundo fetch pode rodar antes do INSERT ser persistido em replica e a mensagem "some" até o próximo evento.
+2. Pior: o fetch dos DMs no carregamento inicial não filtra por par de conversa e tem `LIMIT 500`, então em contas com muito histórico (já temos 761 DMs no banco) **as mensagens mais antigas são cortadas** e, ao trocar de conversa, parecem ter desaparecido.
+3. O re-sync no `SUBSCRIBED` substitui o array inteiro em vez de fazer merge, descartando mensagens otimistas ainda não confirmadas.
+4. Não há refetch quando a aba volta ao foco (`visibilitychange`), então conexões realtime caídas em background nunca se recuperam até refresh manual.
 
-## Melhorias necessárias
+### Mudanças em `src/routes/_app.chat.tsx`
 
-Atualizar `src/routes/_app.chat.tsx` para:
+1. **DMs paginados por conversa, não global:**
+   - Remover o fetch global de 500 DMs no load inicial.
+   - Buscar DMs sob demanda quando o usuário abre uma conversa (`selectedPeer`), com `LIMIT 200` filtrando `(sender,recipient)` do par.
+   - Manter um cache `Record<peerId, DirectMessage[]>` para evitar refetch ao alternar.
 
-1. Buscar mensagens pela data **decrescente** no banco, com limite, e depois ordenar no frontend em ordem cronológica para exibição.
-2. Aumentar o histórico geral de DMs carregado inicialmente de 500 para 1000.
-3. Criar funções de sincronização reutilizáveis:
-   - `loadRoomMessages`
-   - `loadDirectMessages`
-   - `loadDirectConversation`
-4. Ao abrir uma conversa individual, buscar o histórico específico daquela conversa separadamente, garantindo que conversas antigas/recentes não fiquem cortadas pelo limite global.
-5. Fazer merge por `id` nas mensagens recebidas por realtime e re-sincronizações, evitando duplicadas e evitando sobrescrever mensagens já recebidas localmente.
-6. Manter o re-sync quando o canal realtime assinar novamente, mas usando merge em vez de substituir o estado por uma janela incompleta.
-7. Adicionar logs/toasts de erro se a sincronização falhar, para não falhar silenciosamente.
+2. **Merge em vez de replace nos re-syncs:**
+   - Trocar `setRoomMsgs(data)` por uma função de merge que: mantém mensagens otimistas (id temporário), deduplica por id real, e preserva ordem por `created_at`.
+   - Mesma lógica para DMs.
 
-## Arquivo a alterar
+3. **Refetch ao voltar foco / reconectar:**
+   - Adicionar listener `document.visibilitychange` → quando `visible`, refazer fetch da sala atual e da conversa aberta.
+   - Adicionar listener `window.online` com a mesma ação.
 
-- `src/routes/_app.chat.tsx`
+4. **Subscription robusta:**
+   - Tratar status `CHANNEL_ERROR` e `TIMED_OUT` chamando `supabase.removeChannel` + recriar canal (backoff simples 2s).
+   - Garantir que o canal de DMs use filtro por `recipient_id=eq.${user.id}` E um segundo handler para `sender_id=eq.${user.id}` (mensagens próprias enviadas em outro dispositivo).
 
-## Resultado esperado
+5. **Carga inicial determinística:**
+   - Fazer o fetch inicial da sala APÓS o `subscribe` confirmar, eliminando a corrida entre os dois `useEffect`.
 
-Após atualizar a página, o chat passa a mostrar as mensagens mais recentes e o histórico correto da conversa aberta, em vez de parecer que mensagens enviadas desapareceram.
+### Verificação
+- Abrir o chat, enviar mensagem, dar F5 → mensagem deve continuar visível.
+- Abrir DM antiga (>200 mensagens atrás) → histórico carrega ao rolar.
+- Minimizar a aba por 1 minuto, voltar → mensagens recebidas no intervalo aparecem.
+- Console sem warnings de canal duplicado.
+
+Sem mudanças de schema nem de RLS.
