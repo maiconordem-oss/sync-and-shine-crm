@@ -160,9 +160,11 @@ function TasksPage() {
   const savedAssignee = useRef<string | null>(null);
   const assigneeDefaulted = useRef(false);
   useEffect(() => {
+    // StrictMode reexecuta o efeito: sem esta trava, a segunda execução relê o
+    // valor provisório que a persistência acabou de gravar e sobrescreve o padrão.
+    if (filtersHydrated.current) return;
     try {
       const rawV2 = localStorage.getItem(FILTERS_KEY);
-      console.log("[tasks-debug] hydrate", { rawV2 });
       const rawV1 = localStorage.getItem("tasks.filters.v1");
       const raw = rawV2 ?? rawV1;
       if (raw) {
@@ -192,7 +194,6 @@ function TasksPage() {
   useEffect(() => {
     if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
     assigneeDefaulted.current = true;
-    console.log("[tasks-debug] default effect", { saved: savedAssignee.current, isAdmin, uid: user.id });
     if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
   }, [loading, user, isAdmin]);
   useEffect(() => {
@@ -200,7 +201,6 @@ function TasksPage() {
     // antes do padrão "Minhas tarefas" ser aplicado.
     if (!filtersHydrated.current || loading) return;
     try {
-      console.log("[tasks-debug] persist", { filterAssignee, loading });
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
         search, filterProject, filterAssignee, filterPriority, filterStatus,
         filterType, filterDue, filterTags, createdFrom, createdTo,
