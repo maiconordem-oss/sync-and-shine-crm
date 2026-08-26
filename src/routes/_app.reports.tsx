@@ -58,7 +58,22 @@ interface TaskRow {
   project_id?: string | null;
   project_name?: string | null;
   project_color?: string | null;
+  reference_at?: string | null;
+  reference_source?: "completed" | "approved" | "canceled" | "created" | string | null;
+  incomplete_record?: boolean | null;
 }
+
+const REF_LABEL: Record<string, string> = {
+  completed: "Conclusão",
+  approved: "Aprovação",
+  canceled: "Cancelamento",
+  created: "Criação",
+};
+
+function refLabel(t: TaskRow) {
+  return REF_LABEL[t.reference_source ?? "completed"] ?? "Conclusão";
+}
+
 
 interface Closure {
   id: string;
