@@ -215,8 +215,9 @@ function PJView({ userId }: { userId: string }) {
 
       <h2>Tarefas do mês</h2>
       <table>
-        <thead><tr><th>ID</th><th>Tarefa / Projeto</th><th>Criada</th><th>Vencimento</th><th>Concluída</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-        <tbody>${tasks.length === 0 ? '<tr><td colspan="7" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+        <thead><tr><th>ID</th><th>Tarefa / Projeto</th><th>Criada</th><th>Vencimento</th><th>Concluída</th><th>Base do mês</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+        <tbody>${tasks.length === 0 ? '<tr><td colspan="8" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+
           const pay = monthPayments.find((p) => p.task_id === t.id);
           const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".", ",") : "—";
           const cre = t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—";
