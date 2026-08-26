@@ -132,13 +132,9 @@ interface PJRow {
   closure: Closure | null;
   /** Conferência do mês */
   sumTasks: number;
-  sumLinkedPayments: number;
   sumManual: number;
-  diff: number;
   unmatchedTasks: TaskRow[];
-  diffPartial: number;
-  diffMissing: number;
-  partialTasks: { task: TaskRow; payment: PaymentRow; gap: number }[];
+
 
 }
 
