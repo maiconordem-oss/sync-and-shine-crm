@@ -954,34 +954,8 @@ function PJRow({
                           <span>Tarefa concluída <strong>sem pagamento</strong> registrado. Verifique se foi gerado corretamente.</span>
                         </div>
                       )}
-                      {partialGap !== 0 && taskPayment && (
-                        <div className="flex items-start justify-between gap-2 text-[11px] text-amber-800 bg-amber-100/60 rounded px-2 py-1.5">
-                          <span className="flex items-start gap-1.5">
-                            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                            <span>
-                              Pagamento gerado de <strong>{formatBRL(Number(taskPayment.amount))}</strong> para tarefa de{" "}
-                              <strong>{formatBRL(Number(t.service_value ?? 0))}</strong>
-                              {partialGap > 0 ? ` — faltam ${formatBRL(partialGap)}` : ` — excedente de ${formatBRL(Math.abs(partialGap))}`}
-                            </span>
-                          </span>
-                          {can("payments.manage") && taskPayment.status === "pending" && (
-                            <button
-                              className="shrink-0 text-primary hover:underline font-medium"
-                              onClick={async () => {
-                                const { error } = await supabase.from("payments")
-                                  .update({ amount: Number(t.service_value ?? 0) })
-                                  .eq("id", taskPayment.id)
-                                  .eq("status", "pending");
-                                if (error) { toast.error(error.message); return; }
-                                toast.success("Valor do pagamento ajustado.");
-                                onReload();
-                              }}
-                            >
-                              Ajustar para {formatBRL(Number(t.service_value ?? 0))}
-                            </button>
-                          )}
-                        </div>
-                      )}
+
+
 
                       {/* Payment action if pending */}
                       {isPendingTask && t.service_value && !isPaid && !isCanceled && (
