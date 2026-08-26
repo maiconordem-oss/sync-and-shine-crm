@@ -326,7 +326,9 @@ function PJView({ userId }: { userId: string }) {
                   <th className="p-3 text-left font-medium text-muted-foreground">Criada</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Vencimento</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Concluída</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Base do mês</th>
                   <th className="p-3 text-right font-medium text-muted-foreground">Valor</th>
+
                   <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
