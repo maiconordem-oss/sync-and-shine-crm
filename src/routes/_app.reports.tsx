@@ -1163,10 +1163,28 @@ function PJRow({
               )}
               {isClosed && !isPaid && (
                 <>
-                  <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700" onClick={onMarkPaid} disabled={busy}>
+                  <Button
+                    size="sm"
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => {
+                      if (row.diff !== 0) {
+                        const ok = window.confirm(
+                          `Atenção: há divergência de ${formatBRL(row.diff)} entre as tarefas externas (${formatBRL(row.sumTasks)}) e os pagamentos vinculados (${formatBRL(row.sumLinkedPayments)}) deste mês.\n\n` +
+                          (row.unmatchedTasks.length > 0
+                            ? `Tarefas sem pagamento vinculado: ${row.unmatchedTasks.length}\n\n`
+                            : "") +
+                          "Deseja registrar o pagamento mesmo assim?"
+                        );
+                        if (!ok) return;
+                      }
+                      onMarkPaid();
+                    }}
+                    disabled={busy}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                     {busy ? "Registrando..." : "Marcar como pago"}
                   </Button>
+
                   <Button size="sm" variant="outline" className="text-xs" onClick={onReopen} disabled={busy}>
                     <Unlock className="h-3.5 w-3.5 mr-1" /> Reabrir
                   </Button>
