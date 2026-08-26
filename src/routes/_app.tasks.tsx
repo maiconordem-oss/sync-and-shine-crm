@@ -155,16 +155,24 @@ function TasksPage() {
   const [removeTask, setRemoveTask] = useState<TaskRow | null>(null);
 
   // Persistência local dos filtros
-  const FILTERS_KEY = "tasks.filters.v1";
+  const FILTERS_KEY = "tasks.filters.v2";
   const filtersHydrated = useRef(false);
+  const savedAssignee = useRef<string | null>(null);
+  const assigneeDefaulted = useRef(false);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(FILTERS_KEY);
+      const rawV2 = localStorage.getItem(FILTERS_KEY);
+      const rawV1 = localStorage.getItem("tasks.filters.v1");
+      const raw = rawV2 ?? rawV1;
       if (raw) {
         const s = JSON.parse(raw);
         if (typeof s.search === "string") setSearch(s.search);
         if (s.filterProject) setFilterProject(s.filterProject);
-        if (s.filterAssignee) setFilterAssignee(s.filterAssignee);
+        // v1 de propósito não traz o filtro de responsável: o padrão passa a ser "minhas tarefas"
+        if (rawV2 && s.filterAssignee) {
+          savedAssignee.current = s.filterAssignee;
+          setFilterAssignee(s.filterAssignee);
+        }
         if (s.filterPriority) setFilterPriority(s.filterPriority);
         if (s.filterStatus) setFilterStatus(s.filterStatus);
         if (s.filterType) setFilterType(s.filterType);
@@ -173,9 +181,18 @@ function TasksPage() {
         if (typeof s.createdFrom === "string") setCreatedFrom(s.createdFrom);
         if (typeof s.createdTo === "string") setCreatedTo(s.createdTo);
       }
+      if (rawV1) localStorage.removeItem("tasks.filters.v1");
     } catch { /* noop */ }
     filtersHydrated.current = true;
   }, []);
+
+  // Quem enxerga tarefas de todos (gestor) começa vendo apenas as próprias tarefas;
+  // pode trocar para "Todos" no filtro de Responsável e a escolha fica salva.
+  useEffect(() => {
+    if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
+    assigneeDefaulted.current = true;
+    if (savedAssignee.current === null && !isAdmin) setFilterAssignee(user.id);
+  }, [loading, user, isAdmin]);
   useEffect(() => {
     if (!filtersHydrated.current) return;
     try {
