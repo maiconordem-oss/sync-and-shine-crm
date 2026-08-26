@@ -1108,14 +1108,17 @@ function PJRow({
 
                     <h2>Tarefas concluídas</h2>
                     <table>
-                      <thead><tr><th>Tarefa</th><th>Conclusão</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-                      <tbody>${tasks.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map(t => {
+                      <thead><tr><th>ID</th><th>Tarefa</th><th>Conclusão</th><th>Base do mês</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+                      <tbody>${tasks.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map(t => {
                         const pay = payments.find(p => p.task_id === t.id && p.status !== "cancelled");
                         const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".",",") : "—";
                         const date = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
-                        const badge = pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
-                        return `<tr><td>${t.title}</td><td>${date}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+                        const base = `${refLabel(t)}${t.reference_at ? ` (${new Date(t.reference_at).toLocaleDateString("pt-BR")})` : ""}`;
+                        const warn = t.incomplete_record ? '<div style="font-size:10px;color:#92400e">⚠ Sem data de conclusão</div>' : "";
+                        const badge = t.status === "canceled" ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
+                        return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0,8)}</td><td>${t.title}</td><td>${date}</td><td style="font-size:11px">${base}${warn}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
                       }).join("")}</tbody>
+
                     </table>
 
                     ${manuals.length > 0 ? `
