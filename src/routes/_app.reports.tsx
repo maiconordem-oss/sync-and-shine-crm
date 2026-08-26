@@ -874,13 +874,12 @@ function PJRow({
                   const isPaidTask = taskPayment?.status === "paid" || (isPaid && !isCanceled);
                   const isPendingTask = !isPaidTask;
                   const canceledAfterDone = isCanceled && !!t.completed_at;
-                  const doneNoPayment = t.status === "done" && !taskPayment && !isPaid && Number(t.service_value ?? 0) > 0;
                   return (
                     <div key={t.id} className={cn(
                       "rounded-lg border bg-background p-3 space-y-2",
                       isCanceled && "border-rose-200 bg-rose-50/40",
-                      doneNoPayment && "border-amber-300 bg-amber-50/40",
                     )}>
+
                       {/* Title + value */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
