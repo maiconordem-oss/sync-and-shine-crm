@@ -866,11 +866,17 @@ function PJRow({
               <div className="flex justify-between"><span>Soma das tarefas externas</span><span className="font-medium">{formatBRL(row.sumTasks)}</span></div>
               <div className="flex justify-between"><span>Soma dos pagamentos vinculados</span><span className="font-medium">{formatBRL(row.sumLinkedPayments)}</span></div>
               <div className="flex justify-between"><span>Pagamentos avulsos</span><span className="font-medium">{formatBRL(row.sumManual)}</span></div>
+              <div className={cn("flex justify-between border-t pt-1 mt-1", row.diffPartial !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
+                <span>Diferença por pagamento parcial</span><span>{formatBRL(row.diffPartial)}</span>
+              </div>
+              <div className={cn("flex justify-between", row.diffMissing !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
+                <span>Diferença por tarefa sem pagamento</span><span>{formatBRL(row.diffMissing)}</span>
+              </div>
               <div className={cn("flex justify-between border-t pt-1 mt-1 font-semibold", row.diff !== 0 ? "text-amber-800" : "text-emerald-800")}>
-                <span>Diferença</span><span>{formatBRL(row.diff)}</span>
+                <span>Diferença total</span><span>{formatBRL(row.diff)}</span>
               </div>
             </div>
-            {row.diff !== 0 && row.unmatchedTasks.length > 0 && (
+            {row.unmatchedTasks.length > 0 && (
               <div className="mt-2 text-xs text-amber-900">
                 <div className="font-medium mb-1">Tarefas sem pagamento vinculado:</div>
                 <ul className="space-y-0.5">
@@ -884,6 +890,22 @@ function PJRow({
                 </ul>
               </div>
             )}
+            {row.partialTasks.length > 0 && (
+              <div className="mt-2 text-xs text-amber-900">
+                <div className="font-medium mb-1">Pagamentos com valor diferente da tarefa:</div>
+                <ul className="space-y-0.5">
+                  {row.partialTasks.map(({ task, payment, gap }) => (
+                    <li key={task.id}>
+                      <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="hover:underline">
+                        #{task.id.slice(0, 8)} — {task.title}
+                      </Link>{" "}
+                      — pagamento de {formatBRL(Number(payment.amount))} para tarefa de {formatBRL(Number(task.service_value ?? 0))}
+                      {gap > 0 ? ` (faltam ${formatBRL(gap)})` : ` (excedente de ${formatBRL(Math.abs(gap))})`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
           </div>
 
 
