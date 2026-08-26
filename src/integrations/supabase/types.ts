@@ -1017,9 +1017,12 @@ export type Database = {
           description: string
           due_date: string
           id: string
+          incomplete_record: boolean
           project_color: string
           project_id: string
           project_name: string
+          reference_at: string
+          reference_source: string
           service_value: number
           status: string
           task_type: string
