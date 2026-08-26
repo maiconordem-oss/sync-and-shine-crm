@@ -388,8 +388,19 @@ function PJView({ userId }: { userId: string }) {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-muted/20 border-t">
-                          <td colSpan={7} className="p-4 text-xs space-y-2">
+                          <td colSpan={8} className="p-4 text-xs space-y-2">
+                            {t.incomplete_record && (
+                              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
+                                Sem data de conclusão registrada — esta tarefa foi considerada neste mês pela data de {refLabel(t).toLowerCase()}. Peça revisão ao gestor.
+                              </div>
+                            )}
+                            {isCanc && t.completed_at && (
+                              <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-rose-900">
+                                Tarefa cancelada após ter sido concluída. Confira com o gestor se o serviço deve ser pago.
+                              </div>
+                            )}
                             {t.description && (
+
                               <div>
                                 <span className="font-semibold text-muted-foreground">Descrição: </span>
                                 <span className="whitespace-pre-wrap">{t.description}</span>
