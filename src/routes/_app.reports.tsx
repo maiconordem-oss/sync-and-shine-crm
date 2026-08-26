@@ -130,6 +130,13 @@ interface PJRow {
   payments: PaymentRow[];
   tasks: TaskRow[];
   closure: Closure | null;
+  /** Conferência do mês */
+  sumTasks: number;
+  sumLinkedPayments: number;
+  sumManual: number;
+  diff: number;
+  unmatchedTasks: TaskRow[];
+
 }
 
 // ─── PJ View (próprio dashboard financeiro) ───────────────────────────────────
