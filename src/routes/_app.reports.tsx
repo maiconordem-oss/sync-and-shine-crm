@@ -1200,12 +1200,10 @@ function PJRow({
                     size="sm"
                     className="text-xs bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => {
-                      if (row.diff !== 0) {
+                      if (row.unmatchedTasks.length > 0) {
                         const ok = window.confirm(
-                          `Atenção: há divergência de ${formatBRL(row.diff)} entre as tarefas externas (${formatBRL(row.sumTasks)}) e os pagamentos vinculados (${formatBRL(row.sumLinkedPayments)}) deste mês.\n\n` +
-                          (row.unmatchedTasks.length > 0
-                            ? `Tarefas sem pagamento vinculado: ${row.unmatchedTasks.length}\n\n`
-                            : "") +
+                          `Atenção: ${row.unmatchedTasks.length} tarefa(s) externa(s) deste mês ainda não têm pagamento vinculado.\n\n` +
+                          `Total do mês pelas tarefas: ${formatBRL(row.sumTasks + row.sumManual)}\n\n` +
                           "Deseja registrar o pagamento mesmo assim?"
                         );
                         if (!ok) return;
