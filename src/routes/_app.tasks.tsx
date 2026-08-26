@@ -194,14 +194,16 @@ function TasksPage() {
     if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
   }, [loading, user, isAdmin]);
   useEffect(() => {
-    if (!filtersHydrated.current) return;
+    // Só grava depois da autenticação resolver, para não salvar o filtro provisório
+    // antes do padrão "Minhas tarefas" ser aplicado.
+    if (!filtersHydrated.current || loading) return;
     try {
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
         search, filterProject, filterAssignee, filterPriority, filterStatus,
         filterType, filterDue, filterTags, createdFrom, createdTo,
       }));
     } catch { /* noop */ }
-  }, [search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
+  }, [loading, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
 
   // Create form
 
