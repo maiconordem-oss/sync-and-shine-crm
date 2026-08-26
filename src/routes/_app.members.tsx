@@ -22,11 +22,16 @@ function MembersPage() {
   const [roles, setRoles] = useState<Record<string, Role>>({});
 
   const load = async () => {
-    const [m, r] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,email,job_title,contract_type"),
+    const [m, r, e] = await Promise.all([
+      supabase.from("profiles").select("id,full_name,job_title,contract_type"),
       supabase.from("user_roles").select("user_id,role"),
+      supabase.rpc("get_profile_emails"),
     ]);
-    setMembers((m.data ?? []) as Member[]);
+    const emails = new Map((e.data ?? []).map((row) => [row.id, row.email]));
+    setMembers(((m.data ?? []) as Omit<Member, "email">[]).map((p) => ({
+      ...p,
+      email: emails.get(p.id) ?? "",
+    })) as Member[]);
     const map: Record<string, Role> = {};
     ((r.data ?? []) as { user_id: string; role: Role }[]).forEach((row) => { map[row.user_id] = row.role; });
     setRoles(map);
