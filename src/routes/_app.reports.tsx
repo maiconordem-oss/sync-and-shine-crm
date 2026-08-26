@@ -553,12 +553,24 @@ function AdminView() {
       }),
       supabase.from("monthly_closures").select("*").eq("reference_month", month),
     ]);
+    const monthTasks = (taskRes.data ?? []) as TaskRow[];
+    // Pagamentos vinculados às tarefas do mês pertencem a este mês, mesmo que o
+    // vencimento tenha caído no mês seguinte (vencimento = criação + 7 dias).
+    let allPayments = (payRes.data ?? []) as PaymentRow[];
+    const taskIds = monthTasks.map((t) => t.id);
+    if (taskIds.length > 0) {
+      const { data: linkedPays } = await supabase.from("payments").select("*").in("task_id", taskIds);
+      const byId = new Map(allPayments.map((p) => [p.id, p]));
+      for (const p of (linkedPays ?? []) as PaymentRow[]) byId.set(p.id, p);
+      allPayments = Array.from(byId.values());
+    }
     setPjs((pjRes.data ?? []) as PJProfile[]);
-    setPayments((payRes.data ?? []) as PaymentRow[]);
-    setTasks((taskRes.data ?? []) as TaskRow[]);
+    setPayments(allPayments);
+    setTasks(monthTasks);
     setClosures((closRes.data ?? []) as Closure[]);
     setLoading(false);
   }, [month, startISO, endISO, startDate, endDate]);
+
 
   useEffect(() => { void load(); }, [load]);
 
