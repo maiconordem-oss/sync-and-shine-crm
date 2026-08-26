@@ -191,7 +191,7 @@ function TasksPage() {
   useEffect(() => {
     if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
     assigneeDefaulted.current = true;
-    if (savedAssignee.current === null && !isAdmin) setFilterAssignee(user.id);
+    if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
   }, [loading, user, isAdmin]);
   useEffect(() => {
     if (!filtersHydrated.current) return;
@@ -248,7 +248,9 @@ function TasksPage() {
         if (!inTitle && !inDesc && !inTags) return false;
       }
       if (filterProject !== "all" && t.project_id !== filterProject) return false;
-      if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
+      if (filterAssignee === "mine") {
+        if (t.assignee_id !== user?.id && t.created_by !== user?.id) return false;
+      } else if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterType !== "all" && t.task_type !== filterType) return false;
@@ -459,6 +461,7 @@ function TasksPage() {
             <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">Todos</SelectItem>
+              <SelectItem value="mine" className="text-xs">Minhas tarefas</SelectItem>
               {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -518,7 +521,7 @@ function TasksPage() {
         <div className="flex flex-wrap gap-1.5 items-center text-xs">
           {filterStatus !== "all" && <FilterChip label={`Status: ${STATUS_LABEL[filterStatus] ?? filterStatus}`} onRemove={() => setFilterStatus("all")} />}
           {filterProject !== "all" && <FilterChip label={`Projeto: ${projectById(filterProject)?.name ?? "—"}`} onRemove={() => setFilterProject("all")} />}
-          {filterAssignee !== "all" && <FilterChip label={`Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
+          {filterAssignee !== "all" && <FilterChip label={filterAssignee === "mine" ? "Minhas tarefas" : `Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
           {filterPriority !== "all" && <FilterChip label={`Prioridade: ${PRIORITY_LABEL[filterPriority] ?? filterPriority}`} onRemove={() => setFilterPriority("all")} />}
           {filterType !== "all" && <FilterChip label={typeLabel(filterType)} onRemove={() => setFilterType("all")} />}
           {filterDue !== "all" && <FilterChip label={dueLabel(filterDue)} onRemove={() => setFilterDue("all")} />}
