@@ -616,12 +616,25 @@ function AdminView() {
     const sumLinkedPayments = linked.reduce((s, p) => s + Number(p.amount), 0);
     const linkedTaskIds = new Set(linked.map((p) => p.task_id));
     const unmatchedTasks = valuedTasks.filter((t) => !linkedTaskIds.has(t.id));
+    const diffMissing = Number(unmatchedTasks.reduce((s, t) => s + Number(t.service_value ?? 0), 0).toFixed(2));
+    // Pagamento vinculado com valor diferente do valor da tarefa (pagamento parcial)
+    const partialTasks = valuedTasks
+      .map((t) => {
+        const pay = linked.find((p) => p.task_id === t.id);
+        if (!pay) return null;
+        const gap = Number((Number(t.service_value ?? 0) - Number(pay.amount)).toFixed(2));
+        return gap !== 0 ? { task: t, payment: pay, gap } : null;
+      })
+      .filter(Boolean) as { task: TaskRow; payment: PaymentRow; gap: number }[];
+    const diffPartial = Number(partialTasks.reduce((s, x) => s + x.gap, 0).toFixed(2));
     const diff = Number((sumTasks - sumLinkedPayments).toFixed(2));
     return {
       pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask,
       payments: pjPayments, tasks: pjTasks, closure: closureForPj,
       sumTasks, sumLinkedPayments, sumManual: manualTotal, diff, unmatchedTasks,
+      diffPartial, partialTasks, diffMissing,
     };
+
 
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
 
