@@ -352,13 +352,15 @@ function PJView({ userId }: { userId: string }) {
                         onClick={() => setExpandedTask(isExpanded ? null : t.id)}
                       >
                         <td className="p-3 font-mono text-[10px] text-muted-foreground align-top">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }}
-                            className="hover:text-foreground hover:underline"
+                          <Link
+                            to="/tasks/$taskId"
+                            params={{ taskId: t.id }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-primary hover:underline"
+                            title="Abrir tarefa"
                           >
                             #{t.id.slice(0, 8)}
-                          </button>
+                          </Link>
                         </td>
                         <td className="p-3 align-top">
                           <div className="font-medium">{t.title}</div>
@@ -884,14 +886,15 @@ function PJRow({
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium leading-snug">{t.title}</div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[10px] text-muted-foreground font-mono">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(t.id); toast.success("ID copiado"); }}
-                              className="hover:text-foreground underline-offset-2 hover:underline"
-                              title="Copiar ID completo"
+                            <Link
+                              to="/tasks/$taskId"
+                              params={{ taskId: t.id }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-primary underline-offset-2 hover:underline"
+                              title="Abrir tarefa"
                             >
                               #{t.id.slice(0, 8)}
-                            </button>
+                            </Link>
                           </div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 h-4", {
