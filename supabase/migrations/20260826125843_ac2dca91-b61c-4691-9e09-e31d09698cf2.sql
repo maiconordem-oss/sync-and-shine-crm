@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.get_pj_tasks_for_report(timestamptz, timestamptz) FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.get_pj_tasks_for_report(timestamptz, timestamptz) TO authenticated;
