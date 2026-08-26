@@ -124,12 +124,14 @@ function DashboardPage() {
         <StatCard icon={ListChecks} label="Minhas tarefas" value={stats?.myTasks ?? 0} />
         <StatCard icon={AlertTriangle} label="Em atraso" value={stats?.overdue ?? 0} accent="text-rose-600" />
         <StatCard icon={ListChecks} label="Concluídas (7d)" value={stats?.doneWeek ?? 0} accent="text-emerald-600" />
-        <StatCard
-          icon={Wallet}
-          label="Pagamentos pendentes"
-          value={`${stats?.pendingPayments ?? 0}`}
-          sub={formatBRL(stats?.pendingTotal ?? 0)}
-        />
+        <Link to="/reports" className="block">
+          <StatCard
+            icon={Wallet}
+            label="Pagamentos pendentes (mês atual)"
+            value={`${stats?.pendingPayments ?? 0}`}
+            sub={formatBRL(stats?.pendingTotal ?? 0)}
+          />
+        </Link>
       </div>
 
       {isManagerOrAdmin && (
