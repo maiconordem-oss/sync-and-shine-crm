@@ -567,7 +567,12 @@ function AdminView() {
       for (const p of (linkedPays ?? []) as PaymentRow[]) byId.set(p.id, p);
       allPayments = Array.from(byId.values());
     }
-    setPjs((pjRes.data ?? []) as PJProfile[]);
+    const { data: emailRows } = await supabase.rpc("get_profile_emails");
+    const emailMap = new Map((emailRows ?? []).map((row) => [row.id, row.email]));
+    setPjs(((pjRes.data ?? []) as Omit<PJProfile, "email">[]).map((p) => ({
+      ...p,
+      email: emailMap.get(p.id) ?? "",
+    })) as PJProfile[]);
     setPayments(allPayments);
     setTasks(monthTasks);
     setClosures((closRes.data ?? []) as Closure[]);
