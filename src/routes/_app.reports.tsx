@@ -229,7 +229,11 @@ function PJView({ userId }: { userId: string }) {
           const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : taskPaidPrint ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
           const proj = t.project_name ? `<div style="font-size:10px;color:#666;margin-top:2px">● ${t.project_name}</div>` : "";
           const desc = t.description ? `<div style="font-size:10px;color:#888;margin-top:2px">${String(t.description).slice(0, 140)}${String(t.description).length > 140 ? "…" : ""}</div>` : "";
-          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+          const base = `${refLabel(t)}${t.reference_at ? ` (${new Date(t.reference_at).toLocaleDateString("pt-BR")})` : ""}`;
+          const warn = t.incomplete_record ? `<div style="font-size:10px;color:#92400e;margin-top:2px">⚠ Sem data de conclusão registrada</div>` : "";
+          const canc = isCanc && t.cancel_reason ? `<div style="font-size:10px;color:#991b1b;margin-top:2px">Motivo: ${String(t.cancel_reason)}</div>` : "";
+          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}${canc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td style="font-size:11px">${base}${warn}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+
         }).join("")}</tbody>
       </table>
 
