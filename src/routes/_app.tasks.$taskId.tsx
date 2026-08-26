@@ -136,7 +136,7 @@ function TaskDetailPage() {
     const previousAssignee = task.assignee_id;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("tasks").update(patch as any).eq("id", task.id).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(error.message); void load(); return; }
     const updated = data as TaskFull;
     setTask(updated);
     if (user) {
