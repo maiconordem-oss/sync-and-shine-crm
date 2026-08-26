@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useCallback, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +58,22 @@ interface TaskRow {
   project_id?: string | null;
   project_name?: string | null;
   project_color?: string | null;
+  reference_at?: string | null;
+  reference_source?: "completed" | "approved" | "canceled" | "created" | string | null;
+  incomplete_record?: boolean | null;
 }
+
+const REF_LABEL: Record<string, string> = {
+  completed: "Conclusão",
+  approved: "Aprovação",
+  canceled: "Cancelamento",
+  created: "Criação",
+};
+
+function refLabel(t: TaskRow) {
+  return REF_LABEL[t.reference_source ?? "completed"] ?? "Conclusão";
+}
+
 
 interface Closure {
   id: string;
@@ -115,6 +130,13 @@ interface PJRow {
   payments: PaymentRow[];
   tasks: TaskRow[];
   closure: Closure | null;
+  /** Conferência do mês */
+  sumTasks: number;
+  sumLinkedPayments: number;
+  sumManual: number;
+  diff: number;
+  unmatchedTasks: TaskRow[];
+
 }
 
 // ─── PJ View (próprio dashboard financeiro) ───────────────────────────────────
@@ -200,8 +222,9 @@ function PJView({ userId }: { userId: string }) {
 
       <h2>Tarefas do mês</h2>
       <table>
-        <thead><tr><th>ID</th><th>Tarefa / Projeto</th><th>Criada</th><th>Vencimento</th><th>Concluída</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-        <tbody>${tasks.length === 0 ? '<tr><td colspan="7" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+        <thead><tr><th>ID</th><th>Tarefa / Projeto</th><th>Criada</th><th>Vencimento</th><th>Concluída</th><th>Base do mês</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+        <tbody>${tasks.length === 0 ? '<tr><td colspan="8" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map((t) => {
+
           const pay = monthPayments.find((p) => p.task_id === t.id);
           const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".", ",") : "—";
           const cre = t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—";
@@ -213,7 +236,11 @@ function PJView({ userId }: { userId: string }) {
           const badge = isCanc ? '<span class="badge-canc">Cancelada</span>' : taskPaidPrint ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Aguardando</span>';
           const proj = t.project_name ? `<div style="font-size:10px;color:#666;margin-top:2px">● ${t.project_name}</div>` : "";
           const desc = t.description ? `<div style="font-size:10px;color:#888;margin-top:2px">${String(t.description).slice(0, 140)}${String(t.description).length > 140 ? "…" : ""}</div>` : "";
-          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+          const base = `${refLabel(t)}${t.reference_at ? ` (${new Date(t.reference_at).toLocaleDateString("pt-BR")})` : ""}`;
+          const warn = t.incomplete_record ? `<div style="font-size:10px;color:#92400e;margin-top:2px">⚠ Sem data de conclusão registrada</div>` : "";
+          const canc = isCanc && t.cancel_reason ? `<div style="font-size:10px;color:#991b1b;margin-top:2px">Motivo: ${String(t.cancel_reason)}</div>` : "";
+          return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0, 8)}</td><td><div>${t.title}</div>${proj}${desc}${canc}</td><td>${cre}</td><td>${due}</td><td>${con}</td><td style="font-size:11px">${base}${warn}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+
         }).join("")}</tbody>
       </table>
 
@@ -306,7 +333,9 @@ function PJView({ userId }: { userId: string }) {
                   <th className="p-3 text-left font-medium text-muted-foreground">Criada</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Vencimento</th>
                   <th className="p-3 text-left font-medium text-muted-foreground">Concluída</th>
+                  <th className="p-3 text-left font-medium text-muted-foreground">Base do mês</th>
                   <th className="p-3 text-right font-medium text-muted-foreground">Valor</th>
+
                   <th className="p-3 text-left font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
@@ -344,7 +373,16 @@ function PJView({ userId }: { userId: string }) {
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td className="p-3 text-xs align-top">
+                          <span className={cn(t.incomplete_record ? "text-amber-800 font-medium" : "text-muted-foreground")}>
+                            {refLabel(t)}
+                          </span>
+                          {t.reference_at && (
+                            <div className="text-[10px] text-muted-foreground">{new Date(t.reference_at).toLocaleDateString("pt-BR")}</div>
+                          )}
+                        </td>
                         <td className="p-3 text-right font-semibold align-top">{t.service_value ? formatBRL(t.service_value) : "—"}</td>
+
                         <td className="p-3 align-top">
                           <Badge className={cn("text-xs", {
                             "bg-rose-100 text-rose-800": isCanc,
@@ -357,8 +395,19 @@ function PJView({ userId }: { userId: string }) {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-muted/20 border-t">
-                          <td colSpan={7} className="p-4 text-xs space-y-2">
+                          <td colSpan={8} className="p-4 text-xs space-y-2">
+                            {t.incomplete_record && (
+                              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900">
+                                Sem data de conclusão registrada — esta tarefa foi considerada neste mês pela data de {refLabel(t).toLowerCase()}. Peça revisão ao gestor.
+                              </div>
+                            )}
+                            {isCanc && t.completed_at && (
+                              <div className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-rose-900">
+                                Tarefa cancelada após ter sido concluída. Confira com o gestor se o serviço deve ser pago.
+                              </div>
+                            )}
                             {t.description && (
+
                               <div>
                                 <span className="font-semibold text-muted-foreground">Descrição: </span>
                                 <span className="whitespace-pre-wrap">{t.description}</span>
@@ -548,7 +597,20 @@ function AdminView() {
       : 0;
     // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
-    return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure: closureForPj };
+    // Conferência: tarefas externas x pagamentos vinculados
+    const valuedTasks = pjTasks.filter((t) => Number(t.service_value ?? 0) > 0 && t.status !== "canceled");
+    const sumTasks = valuedTasks.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
+    const linked = pjPayments.filter((p) => p.task_id && monthTaskIds.has(p.task_id));
+    const sumLinkedPayments = linked.reduce((s, p) => s + Number(p.amount), 0);
+    const linkedTaskIds = new Set(linked.map((p) => p.task_id));
+    const unmatchedTasks = valuedTasks.filter((t) => !linkedTaskIds.has(t.id));
+    const diff = Number((sumTasks - sumLinkedPayments).toFixed(2));
+    return {
+      pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask,
+      payments: pjPayments, tasks: pjTasks, closure: closureForPj,
+      sumTasks, sumLinkedPayments, sumManual: manualTotal, diff, unmatchedTasks,
+    };
+
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
 
   const grandTotals = useMemo(() => rows.reduce((acc, r) => ({
@@ -763,6 +825,40 @@ function PJRow({
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t bg-muted/10 p-4 space-y-4">
+
+          {/* Conferência do mês */}
+          <div className={cn(
+            "rounded-lg border p-3 text-sm",
+            row.diff !== 0 ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/40",
+          )}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              Conferência do mês
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between"><span>Soma das tarefas externas</span><span className="font-medium">{formatBRL(row.sumTasks)}</span></div>
+              <div className="flex justify-between"><span>Soma dos pagamentos vinculados</span><span className="font-medium">{formatBRL(row.sumLinkedPayments)}</span></div>
+              <div className="flex justify-between"><span>Pagamentos avulsos</span><span className="font-medium">{formatBRL(row.sumManual)}</span></div>
+              <div className={cn("flex justify-between border-t pt-1 mt-1 font-semibold", row.diff !== 0 ? "text-amber-800" : "text-emerald-800")}>
+                <span>Diferença</span><span>{formatBRL(row.diff)}</span>
+              </div>
+            </div>
+            {row.diff !== 0 && row.unmatchedTasks.length > 0 && (
+              <div className="mt-2 text-xs text-amber-900">
+                <div className="font-medium mb-1">Tarefas sem pagamento vinculado:</div>
+                <ul className="space-y-0.5">
+                  {row.unmatchedTasks.map((t) => (
+                    <li key={t.id}>
+                      <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="hover:underline">
+                        #{t.id.slice(0, 8)} — {t.title} ({formatBRL(Number(t.service_value ?? 0))})
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+
 
           {/* Tasks — rich cards */}
           {row.tasks.length === 0 ? (
@@ -1001,6 +1097,8 @@ function PJRow({
                       .pending{color:#b45309}.paid{color:#065f46}
                       .badge-paid{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px}
                       .badge-pend{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px}
+                      .badge-canc{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:12px;font-size:11px}
+
                       @media print{@page{margin:20mm}}
                     </style></head><body>
                     <div class="meta">
@@ -1012,14 +1110,17 @@ function PJRow({
 
                     <h2>Tarefas concluídas</h2>
                     <table>
-                      <thead><tr><th>Tarefa</th><th>Conclusão</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
-                      <tbody>${tasks.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map(t => {
+                      <thead><tr><th>ID</th><th>Tarefa</th><th>Conclusão</th><th>Base do mês</th><th class="right">Valor</th><th class="center">Status</th></tr></thead>
+                      <tbody>${tasks.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:#999">Nenhuma tarefa no período</td></tr>' : tasks.map(t => {
                         const pay = payments.find(p => p.task_id === t.id && p.status !== "cancelled");
                         const val = t.service_value ? "R$ " + Number(t.service_value).toFixed(2).replace(".",",") : "—";
                         const date = t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—";
-                        const badge = pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
-                        return `<tr><td>${t.title}</td><td>${date}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
+                        const base = `${refLabel(t)}${t.reference_at ? ` (${new Date(t.reference_at).toLocaleDateString("pt-BR")})` : ""}`;
+                        const warn = t.incomplete_record ? '<div style="font-size:10px;color:#92400e">⚠ Sem data de conclusão</div>' : "";
+                        const badge = t.status === "canceled" ? '<span class="badge-canc">Cancelada</span>' : pay?.status === "paid" ? '<span class="badge-paid">✓ Pago</span>' : '<span class="badge-pend">⏳ Pendente</span>';
+                        return `<tr><td style="font-family:monospace;font-size:10px">#${t.id.slice(0,8)}</td><td>${t.title}</td><td>${date}</td><td style="font-size:11px">${base}${warn}</td><td class="right">${val}</td><td class="center">${badge}</td></tr>`;
                       }).join("")}</tbody>
+
                     </table>
 
                     ${manuals.length > 0 ? `
@@ -1067,10 +1168,28 @@ function PJRow({
               )}
               {isClosed && !isPaid && (
                 <>
-                  <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700" onClick={onMarkPaid} disabled={busy}>
+                  <Button
+                    size="sm"
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => {
+                      if (row.diff !== 0) {
+                        const ok = window.confirm(
+                          `Atenção: há divergência de ${formatBRL(row.diff)} entre as tarefas externas (${formatBRL(row.sumTasks)}) e os pagamentos vinculados (${formatBRL(row.sumLinkedPayments)}) deste mês.\n\n` +
+                          (row.unmatchedTasks.length > 0
+                            ? `Tarefas sem pagamento vinculado: ${row.unmatchedTasks.length}\n\n`
+                            : "") +
+                          "Deseja registrar o pagamento mesmo assim?"
+                        );
+                        if (!ok) return;
+                      }
+                      onMarkPaid();
+                    }}
+                    disabled={busy}
+                  >
                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                     {busy ? "Registrando..." : "Marcar como pago"}
                   </Button>
+
                   <Button size="sm" variant="outline" className="text-xs" onClick={onReopen} disabled={busy}>
                     <Unlock className="h-3.5 w-3.5 mr-1" /> Reabrir
                   </Button>

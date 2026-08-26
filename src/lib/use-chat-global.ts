@@ -28,16 +28,24 @@ export function useGlobalPresence() {
     if (!user) return;
     let lastActivity = Date.now();
     let cancelled = false;
-    const upsert = async (status: PresenceStatus) => {
+    let lastSentStatus: PresenceStatus | null = null;
+    let lastSentAt = 0;
+    // Só grava no banco quando o status muda de fato, ou a cada 10 min como "sinal de vida".
+    const KEEPALIVE_MS = 10 * 60 * 1000;
+    const upsert = async (status: PresenceStatus, force = false) => {
       if (cancelled) return;
       setOwnStatus(status);
+      const now = Date.now();
+      if (!force && status === lastSentStatus && now - lastSentAt < KEEPALIVE_MS) return;
+      lastSentStatus = status;
+      lastSentAt = now;
       await supabase.from("user_presence").upsert({
         user_id: user.id,
         status,
         last_seen_at: new Date().toISOString(),
       });
     };
-    void upsert("online");
+    void upsert("online", true);
     const onActivity = () => { lastActivity = Date.now(); };
     ["mousemove", "keydown", "click", "touchstart"].forEach((e) =>
       window.addEventListener(e, onActivity, { passive: true })
@@ -45,7 +53,8 @@ export function useGlobalPresence() {
     const heartbeat = window.setInterval(() => {
       const idle = Date.now() - lastActivity;
       void upsert(idle > 5 * 60 * 1000 ? "away" : "online");
-    }, 30_000);
+    }, 2 * 60 * 1000);
+
     const onUnload = () => {
       try {
         navigator.sendBeacon?.(
