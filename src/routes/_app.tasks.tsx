@@ -191,6 +191,7 @@ function TasksPage() {
   useEffect(() => {
     if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
     assigneeDefaulted.current = true;
+    console.log("[tasks-debug] default effect", { saved: savedAssignee.current, isAdmin, uid: user.id });
     if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
   }, [loading, user, isAdmin]);
   useEffect(() => {
