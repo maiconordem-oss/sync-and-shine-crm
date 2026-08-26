@@ -875,9 +875,6 @@ function PJRow({
                   const isPendingTask = !isPaidTask;
                   const canceledAfterDone = isCanceled && !!t.completed_at;
                   const doneNoPayment = t.status === "done" && !taskPayment && !isPaid && Number(t.service_value ?? 0) > 0;
-                  const partialGap = taskPayment && Number(t.service_value ?? 0) > 0
-                    ? Number((Number(t.service_value ?? 0) - Number(taskPayment.amount)).toFixed(2))
-                    : 0;
                   return (
                     <div key={t.id} className={cn(
                       "rounded-lg border bg-background p-3 space-y-2",
