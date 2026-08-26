@@ -276,7 +276,7 @@ function TasksPage() {
 
       return true;
     });
-  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo]);
+  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo, user?.id]);
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
