@@ -764,6 +764,7 @@ function AdminView() {
                   onMarkPaid={() => markPaid(r.pj.id)}
                   onReopen={() => reopenClosure(r.pj.id)}
                   userId={user?.id ?? null}
+                  onReload={() => { void load(); }}
                 />
               ))}
               {/* Grand total row */}
