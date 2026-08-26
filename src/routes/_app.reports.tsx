@@ -1097,6 +1097,8 @@ function PJRow({
                       .pending{color:#b45309}.paid{color:#065f46}
                       .badge-paid{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-size:11px}
                       .badge-pend{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:11px}
+                      .badge-canc{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:12px;font-size:11px}
+
                       @media print{@page{margin:20mm}}
                     </style></head><body>
                     <div class="meta">
