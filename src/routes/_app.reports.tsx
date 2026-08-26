@@ -945,23 +945,14 @@ function PJRow({
                           <span>Pagamento <strong>preservado</strong> — o serviço foi concluído antes do cancelamento. Confira antes de fechar o mês.</span>
                         </div>
                       )}
-                      {doneNoPayment && (
-                        <div className="flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-100/60 rounded px-2 py-1.5">
-                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span>Tarefa concluída <strong>sem pagamento</strong> registrado. Verifique se foi gerado corretamente.</span>
-                        </div>
-                      )}
-
-
 
                       {/* Payment action if pending */}
                       {isPendingTask && t.service_value && !isPaid && !isCanceled && (
                         <div className="flex items-center justify-between pt-1 border-t border-dashed">
                           <span className="text-xs text-muted-foreground">
-                            {taskPayment
-                              ? `Aguardando fechamento do mês (gerado em ${formatDate(taskPayment.created_at)})`
-                              : "Nenhum pagamento gerado para esta tarefa"}
+                            Aguardando fechamento do mês
                           </span>
+
                           {!isClosed && (
                             <button
                               onClick={async () => {
