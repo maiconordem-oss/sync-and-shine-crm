@@ -136,6 +136,9 @@ interface PJRow {
   sumManual: number;
   diff: number;
   unmatchedTasks: TaskRow[];
+  diffPartial: number;
+  diffMissing: number;
+  partialTasks: { task: TaskRow; payment: PaymentRow; gap: number }[];
 
 }
 
