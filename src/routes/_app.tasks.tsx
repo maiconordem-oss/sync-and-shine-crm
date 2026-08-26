@@ -162,6 +162,7 @@ function TasksPage() {
   useEffect(() => {
     try {
       const rawV2 = localStorage.getItem(FILTERS_KEY);
+      console.log("[tasks-debug] hydrate", { rawV2 });
       const rawV1 = localStorage.getItem("tasks.filters.v1");
       const raw = rawV2 ?? rawV1;
       if (raw) {
@@ -199,6 +200,7 @@ function TasksPage() {
     // antes do padrão "Minhas tarefas" ser aplicado.
     if (!filtersHydrated.current || loading) return;
     try {
+      console.log("[tasks-debug] persist", { filterAssignee, loading });
       localStorage.setItem(FILTERS_KEY, JSON.stringify({
         search, filterProject, filterAssignee, filterPriority, filterStatus,
         filterType, filterDue, filterTags, createdFrom, createdTo,
