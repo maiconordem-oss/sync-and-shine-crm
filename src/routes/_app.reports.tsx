@@ -747,7 +747,6 @@ function AdminView() {
                   onMarkPaid={() => markPaid(r.pj.id)}
                   onReopen={() => reopenClosure(r.pj.id)}
                   userId={user?.id ?? null}
-                  onReload={() => { void load(); }}
                 />
               ))}
               {/* Grand total row */}
@@ -781,7 +780,7 @@ function AdminView() {
 }
 
 function PJRow({
-  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId, onReload,
+  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId,
 }: {
   row: PJRow;
   expanded: boolean;
@@ -793,7 +792,7 @@ function PJRow({
   onMarkPaid: () => void;
   onReopen: () => void;
   userId: string | null;
-  onReload: () => void;
+
 }) {
   const { closure } = row;
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
