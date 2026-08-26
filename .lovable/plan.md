@@ -1,214 +1,122 @@
-# Plano de melhorias — FlowCRM
+# Fase 1 — Performance + Relatório PJ
 
-## Resumo
-
-Analisei o código, as migrations e as queries mais lentas do banco. O sistema já tem uma base sólida (tarefas, kanban, chat, pagamentos, automações, relatórios PJ), mas há gargalos de performance, risco de inconsistência financeira e oportunidades de UX que podem ser resolvidos em ciclos curtos. Proponho quatro frentes, priorizadas por impacto.
-
-```text
-Impacto alto  → Performance do banco + relatório PJ + automações server-side
-Impacto médio → Notificações WhatsApp + UX mobile/busca
-Impacto contínuo → Segurança, logs e governança
-```
+Escopo reduzido conforme pedido: apenas performance e relatório PJ. Tudo aditivo — nenhuma tarefa, pagamento, fechamento ou histórico será apagado ou alterado destrutivamente.
 
 ---
 
-## 1. Performance do banco de dados (alto impacto)
+## O que eu verifiquei no banco (dados reais)
 
-Dados reais das queries mais lentas:
+**Performance — as consultas mais pesadas hoje:**
 
-- `user_presence` upserts: 167.296 chamadas, 475s totais (média 2,84ms). Causa: heartbeat a cada 30s por usuário ativo.
-- `tasks` query de atrasadas: 41.492 chamadas, 130s totais. Faltam índices compostos.
-- `direct_messages`: 4.863 chamadas genéricas + 4.367 por conversa, média 15,8ms / 7,99ms. Faltam índices para `(sender_id, recipient_id, created_at)`.
-- `attachments`: 365.260 chamadas filtrando `task_id` + `mime_type LIKE 'image/%'`. O `LIKE` impede o uso de índice parcial.
+| Consulta | Chamadas | Tempo total |
+|---|---|---|
+| Gravação de presença (online/ausente) | 167.296 | 475s |
+| Tarefas atrasadas do usuário | 41.492 | 130s |
+| Miniatura de imagem da tarefa | 365.260 | 49s |
 
-### Ações
+Conferi os índices existentes: as conversas do chat **já estão indexadas** (`idx_dm_pair`, `idx_dm_recipient_unread`). Faltam índices para as duas outras consultas acima.
 
-1.1. Criar índices direcionados:
+**Relatório PJ — encontrei registros que somem do relatório:**
+
+- **10 tarefas externas canceladas** (R$ 18 a R$ 27 cada) não aparecem em nenhum mês, porque foram canceladas sem nunca ter tido data de conclusão registrada. É exatamente o caso que você relatou.
+- **1 tarefa externa concluída de R$ 120** ("KIT 5 un e 10 un") está com status concluído, tem pagamento gerado, mas **não tem data de conclusão nem de aprovação** — então não entra em nenhum mês do relatório.
+- Boa notícia: **nenhuma** tarefa externa concluída está sem pagamento gerado. E a permissão do relatório para o próprio PJ já está correta (ele consegue ver as próprias tarefas).
+
+---
+
+## 1. Performance
+
+### 1.1 Reduzir gravações de presença (maior gargalo isolado)
+
+Hoje o app grava a presença no banco a cada 30 segundos por usuário conectado, mesmo quando nada mudou. Isso gerou 167 mil gravações.
+
+Mudanças em `src/lib/use-chat-global.ts`:
+- Intervalo de verificação sobe de 30s para 2 minutos.
+- Só grava no banco quando o status **realmente muda** (online → ausente → offline) ou a cada 10 minutos como "sinal de vida".
+- Mantém a gravação imediata ao entrar e o `sendBeacon` ao fechar a aba.
+
+Redução estimada: de ~120 gravações/hora por usuário para ~6.
+
+### 1.2 Índices no banco (aditivo, não remove nada)
+
 ```sql
-CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_due
-  ON public.tasks(assignee_id, status, due_date)
-  WHERE status <> 'done';
-
-CREATE INDEX IF NOT EXISTS idx_direct_messages_conv
-  ON public.direct_messages(sender_id, recipient_id, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_direct_messages_recipient_read
-  ON public.direct_messages(recipient_id, read_at, created_at DESC)
-  WHERE read_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee_due_open
+  ON public.tasks (assignee_id, due_date)
+  WHERE status <> 'done' AND due_date IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_attachments_task_image
-  ON public.attachments(task_id, created_at)
+  ON public.attachments (task_id, created_at)
   WHERE mime_type LIKE 'image/%';
 ```
 
-1.2. Otimizar o heartbeat de presença:
-- Aumentar o intervalo de 30s para 2 minutos.
-- Trocar o `upsert` contínuo por atualização apenas quando o status realmente mudar (online → away → offline).
-- Usar `sendBeacon` no `beforeunload` já existe; manter.
+Não vou recriar os índices de chat — já existem.
 
-1.3. Substituir o `LIKE 'image/%'` no `useTaskThumbnail` por uma coluna booleana `is_image` ou um índice funcional, evitando full scan.
+### 1.3 Reduzir chamadas de miniatura
+
+`useTaskThumbnail` é chamado por cada card do kanban e do dashboard, cada um disparando sua própria consulta (365 mil chamadas). Mudança em `src/components/tasks/task-attachments.tsx`:
+- Cache em memória por `taskId` durante a sessão, evitando refazer a consulta quando o mesmo card volta a renderizar.
 
 ---
 
-## 2. Correção do relatório PJ e consistência financeira (alto impacto)
+## 2. Relatório PJ
 
-Problemas identificados:
+### 2.1 Não deixar tarefa nenhuma "sumir" do relatório
 
-- A função `get_pj_tasks_for_report` ainda contém `is_admin_or_manager(auth.uid())` na cláusula `WHERE`, o que impede o próprio PJ de ver suas tarefas no relatório quando acessa `/reports`.
-- O fechamento mensal mostra "Aguardando fechamento do mês", mas a lógica de `totalPaid` assume que, quando o fechamento está `paid`, todo o valor do mês já foi pago. Isso pode mascarar pagamentos parciais.
-- Não há validação que impeça um admin de marcar como pago um fechamento cujo total diverge dos pagamentos registrados.
+A função `get_pj_tasks_for_report` hoje só encontra a tarefa se ela tiver data de conclusão ou de aprovação dentro do mês. As 11 tarefas listadas acima não têm nenhuma das duas, então desaparecem.
 
-### Ações
+Vou reescrever a função para usar uma **data de referência com cascata**, sem alterar nenhum registro:
 
-2.1. Reescrever `get_pj_tasks_for_report` para permitir que o próprio PJ veja suas tarefas e gestores/admin vejam tudo:
-```sql
-USING (
-  public.is_admin_or_manager(auth.uid())
-  OR t.assignee_id = auth.uid()
-)
+```
+data de referência = conclusão → aprovação → cancelamento → criação
 ```
 
-2.2. Adicionar uma view/RPC `pj_monthly_summary` que cruze tarefas concluídas, pagamentos e fechamentos, expondo:
-- Total de tarefas no mês.
-- Soma de valores das tarefas.
-- Soma dos pagamentos avulsos.
-- Soma dos pagamentos vinculados a tarefas.
-- Divergência entre "a pagar" e "pago".
+Assim toda tarefa externa relevante cai em algum mês. Nenhuma linha é editada; apenas a leitura muda.
 
-2.3. No painel de fechamento, exibir alerta vermelho quando o valor pago não bater com o total do fechamento, impedindo marcar como pago sem justificativa.
+A função também passa a retornar:
+- A data de referência usada e qual campo a originou.
+- Um marcador de "registro incompleto" quando a tarefa não tem data de conclusão própria.
 
-2.4. Adicionar coluna `verified_by` e `verified_at` em `monthly_closures` para rastrear quem confirmou o fechamento.
+### 2.2 Deixar claro na tela de onde vem cada valor
 
----
+Em `src/routes/_app.reports.tsx`, na tabela de tarefas do mês (visão PJ e visão gestor):
 
-## 3. Automações no servidor (alto impacto)
+- Coluna **"Base do mês"**: mostra se a tarefa entrou naquele mês pela conclusão, aprovação, cancelamento ou criação.
+- Alerta âmbar em tarefas com registro incompleto: *"Sem data de conclusão registrada — considerada pela data de criação. Peça revisão ao gestor."*
+- Alerta vermelho em tarefa cancelada que teve serviço executado, com o motivo do cancelamento visível.
+- O mesmo passa a sair no PDF/impressão.
 
-Hoje o motor de automações (`src/lib/automations.ts`) roda no cliente. Isso significa que, se o usuário fechar o navegador no momento da mudança de status, a automação não executa. Além disso, a deduplicação é feita apenas em memória (`_recentRuns`), não sobrevive a reloads e não funciona entre múltiplos dispositivos.
+### 2.3 Painel de conferência do mês (gestor)
 
-### Ações
+Um bloco de resumo no topo da visão do gestor, apenas leitura, cruzando três números do mesmo mês:
 
-3.1. Criar uma tabela de fila server-side:
-```sql
-CREATE TABLE public.automation_queue (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  automation_id uuid NOT NULL REFERENCES public.automations(id),
-  trigger_type text NOT NULL,
-  task_id uuid REFERENCES public.tasks(id),
-  payload jsonb NOT NULL DEFAULT '{}',
-  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','done','error')),
-  attempts int NOT NULL DEFAULT 0,
-  error text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  processed_at timestamptz
-);
-CREATE INDEX idx_automation_queue_pending ON public.automation_queue(status, created_at)
-  WHERE status IN ('pending','error');
+```text
+Soma das tarefas externas .......... R$ X
+Soma dos pagamentos vinculados ..... R$ Y
+Pagamentos avulsos ................. R$ Z
+Diferença (X - Y) .................. R$ D   ← destacado se ≠ 0
 ```
 
-3.2. Substituir a execução client-side por inserção na fila. O cliente apenas enfileira; um cron do `pg_cron` (já habilitado para mensagens agendadas) processa as ações a cada minuto.
+Quando houver diferença, lista quais tarefas causaram, com link direto para cada uma. Isso teria mostrado o problema deste mês no dia em que aconteceu.
 
-3.3. Implementar deduplicação persistente: ignorar fila se já existe item `done` para a mesma `automation_id + task_id + trigger_type` nos últimos 10 minutos.
+### 2.4 Aviso antes de marcar o mês como pago
 
-3.4. Adicionar retry com backoff para itens `error` (até 3 tentativas).
-
----
-
-## 4. Notificações fora do app (médio impacto)
-
-O usuário solicitou alertas no WhatsApp para novas mensagens do chat e novas demandas. Hoje o sistema tem notificações in-app e notificações nativas do navegador, mas nenhum canal externo.
-
-### Ações
-
-4.1. Criar tabela de preferências de notificação:
-```sql
-CREATE TABLE public.notification_preferences (
-  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  whatsapp_number text,
-  notify_chat boolean NOT NULL DEFAULT false,
-  notify_task boolean NOT NULL DEFAULT false,
-  notify_payment boolean NOT NULL DEFAULT false
-);
-```
-
-4.2. Integrar com um gateway de WhatsApp (Evolution API, Z-API ou WhatsApp Business API). Recomendo começar com a Evolution API por ser self-hosted e ter custo baixo.
-
-4.3. Criar uma server route `/api/public/whatsapp-webhook` para receber confirmações de entrega/leitura.
-
-4.4. Adicionar um gatilho no banco (`NOTIFY`) ou enfileirar mensagens em uma tabela `whatsapp_outbox`, processada pelo cron junto com as automações.
-
-4.5. Respeitar horário comercial: não enviar mensagens entre 20h e 8h, exceto para tarefas marcadas como urgente.
-
----
-
-## 5. Melhorias de UX e qualidade de vida (médio impacto)
-
-### 5.1. Busca global
-- Hoje a busca usa `ilike '%termo%'` em tarefas, projetos e membros. Adicionar:
-  - Busca por descrição de tarefa e tags.
-  - Destaque do termo nos resultados.
-  - Atalho `Cmd/Ctrl + K` já existe; adicionar `?` para ajuda de atalhos.
-
-### 5.2. Kanban e listagem de tarefas
-- Adicionar contador de itens por coluna no kanban.
-- Permitir ordenar a lista por prazo, prioridade, data de criação.
-- Salvar a visualização preferida (kanban/lista/calendário) no `localStorage`.
-
-### 5.3. Detalhe da tarefa
-- Exibir histórico de alterações (quem mudou status, responsável, prazo).
-- Mostrar tempo total registrado em formato legível (horas:minutos).
-- Adicionar botão "Duplicar tarefa".
-
-### 5.4. Mobile
-- A sidebar atual não colapsa bem em telas pequenas. Adicionar um drawer/bottom sheet para navegação mobile.
-- O kanban não é scrollável horizontalmente em telas pequenas; garantir `overflow-x-auto` com snap.
-
----
-
-## 6. Segurança e governança (impacto contínuo)
-
-### Ações
-
-6.1. Auditar RLS:
-- `task_audit_log` permite `INSERT` por qualquer usuário autenticado (`WITH CHECK (true)`). Restringir a triggers/gatilhos ou a usuários envolvidos.
-- `comments` ainda tem políticas antigas abertas em algumas migrations. Consolidar para o padrão v3 usado em `tasks`.
-
-6.2. Adicionar rate limiting nas server routes públicas (webhooks) usando `RateLimiter` em memória ou KV.
-
-6.3. Implementar soft delete para tarefas: ao invés de `DELETE`, marcar `deleted_at` e filtrar nas queries. Isso preserva histórico e evita perda acidental de dados financeiros.
-
-6.4. Adicionar logs de auditoria para ações sensíveis: alteração de papel, exclusão de pagamento, mudança de contrato CLT/PJ.
+Ao clicar em "Marcar como pago" num fechamento cuja diferença não é zero, aparece uma confirmação explicando a divergência. O gestor ainda pode confirmar — nada é bloqueado, apenas fica explícito.
 
 ---
 
 ## Detalhes técnicos
 
-### Tecnologias já presentes
-- TanStack Start + React 19 + Tailwind v4.
-- Supabase (Postgres + Auth + Realtime + Storage).
-- `pg_cron` já habilitado.
+**Arquivos alterados**
+- `src/lib/use-chat-global.ts` — intervalo e gravação condicional de presença.
+- `src/components/tasks/task-attachments.tsx` — cache de miniatura.
+- `src/routes/_app.reports.tsx` — colunas, alertas, painel de conferência, impressão.
 
-### O que será adicionado
-- Novas migrations SQL para índices, tabelas de fila e preferências.
-- Server routes para webhooks do WhatsApp.
-- Refatoração de `src/lib/automations.ts` para usar fila server-side.
-- Ajustes em `src/routes/_app.reports.tsx` e na RPC `get_pj_tasks_for_report`.
-- Melhorias pontuais em `src/routes/_app.tasks.tsx`, `_app.tasks.$taskId.tsx` e `_app.chat.tsx`.
+**Migration** (uma só, totalmente aditiva)
+- Dois índices novos.
+- `CREATE OR REPLACE` da função `get_pj_tasks_for_report` com as novas colunas de referência. Substituir a função não apaga dado algum; ela só lê.
 
-### Cronograma sugerido
+**Garantia de preservação**
+- Nenhum `DELETE`, nenhum `DROP TABLE`, nenhum `UPDATE` em tarefas, pagamentos ou fechamentos.
+- As tarefas canceladas continuam canceladas e os pagamentos existentes continuam intactos — elas apenas passam a **aparecer** no relatório com o devido destaque.
 
-| Semana | Entrega |
-|--------|---------|
-| 1 | Índices de banco + otimização de heartbeat + correção do relatório PJ |
-| 2 | Fila server-side de automações + deduplicação persistente |
-| 3 | Notificações WhatsApp (cadastro de número + gateway + envio) |
-| 4 | UX mobile/busca + histórico de tarefa + soft delete |
-| 5 | Revisão de RLS + auditoria + testes de regressão |
-
----
-
-## Próximos passos
-
-Preciso da sua decisão sobre:
-1. Aprovar as 5 frentes de uma vez ou começar apenas pela performance + relatório PJ?
-2. Qual gateway de WhatsApp prefere usar (Evolution API, Z-API, Twilio ou outro)?
-3. Quer que eu implemente o soft delete de tarefas agora ou deixo para o ciclo de governança?
+**Fora deste escopo** (fica para depois, se você quiser): automações no servidor, alertas de WhatsApp, melhorias de UX/mobile e revisão geral de permissões.
