@@ -187,50 +187,54 @@ export function TaskAttachments({ taskId, createdBy, canUpload: canUploadProp }:
 
 // Hook para thumbnail no kanban card
 // Retorna candidatos em ordem; o consumidor faz fallback via onError
+// Cache em memória por taskId: evita refazer a consulta a cada re-render do card.
+const thumbCache = new Map<string, string | null>();
+const thumbInflight = new Map<string, Promise<string | null>>();
+
+async function resolveThumb(taskId: string): Promise<string | null> {
+  const { data } = await supabase.from("attachments").select("storage_path,mime_type").eq("task_id", taskId)
+    .like("mime_type", "image/%").order("created_at", { ascending: true }).limit(1).maybeSingle();
+  if (data) {
+    const { data: s } = await supabase.storage.from("attachments").createSignedUrl(data.storage_path, 3600 * 4);
+    return s?.signedUrl ?? null;
+  }
+  const { data: link } = await supabase.from("task_links" as never)
+    .select("url").eq("task_id", taskId).order("created_at", { ascending: true })
+    .limit(1).maybeSingle() as { data: { url: string } | null };
+  if (!link?.url) return null;
+  const u = encodeURIComponent(link.url);
+  // microlink.io: busca metadados (og:image) — grátis sem chave, funciona com sites com anti-bot
+  try {
+    const res = await fetch(`https://api.microlink.io/?url=${u}&audio=false&video=false`);
+    const json = await res.json();
+    const img = json?.data?.image?.url || json?.data?.logo?.url || null;
+    if (img) return img;
+  } catch {
+    // ignore — fallback abaixo
+  }
+  // Fallback: screenshot embed (caso og:image não exista)
+  return `https://api.microlink.io/?url=${u}&screenshot=true&meta=false&embed=screenshot.url`;
+}
+
 export function useTaskThumbnail(taskId: string | null): string | null {
-  const [thumb, setThumb] = useState<string | null>(null);
+  const [thumb, setThumb] = useState<string | null>(() =>
+    taskId ? thumbCache.get(taskId) ?? null : null
+  );
   useEffect(() => {
     if (!taskId) { setThumb(null); return; }
+    if (thumbCache.has(taskId)) { setThumb(thumbCache.get(taskId) ?? null); return; }
     let canceled = false;
     setThumb(null);
-    (async () => {
-      const { data } = await supabase.from("attachments").select("storage_path,mime_type").eq("task_id", taskId)
-        .like("mime_type", "image/%").order("created_at", { ascending: true }).limit(1).maybeSingle();
-      if (canceled) return;
-      if (data) {
-        const { data: s } = await supabase.storage.from("attachments").createSignedUrl(data.storage_path, 3600 * 4);
-        if (!canceled && s?.signedUrl) setThumb(s.signedUrl);
-        return;
-      }
-      const { data: link } = await supabase.from("task_links" as never)
-        .select("url").eq("task_id", taskId).order("created_at", { ascending: true })
-        .limit(1).maybeSingle() as { data: { url: string } | null };
-      if (canceled) return;
-      if (link?.url) {
-        // microlink.io: busca metadados (og:image) — grátis sem chave, funciona com sites com anti-bot
-        try {
-          const u = encodeURIComponent(link.url);
-          const res = await fetch(`https://api.microlink.io/?url=${u}&audio=false&video=false`);
-          const json = await res.json();
-          if (canceled) return;
-          const img =
-            json?.data?.image?.url ||
-            json?.data?.logo?.url ||
-            null;
-          if (img) {
-            setThumb(img);
-            return;
-          }
-        } catch {
-          // ignore — fallback abaixo
-        }
-        if (canceled) return;
-        // Fallback: screenshot embed (caso og:image não exista)
-        const u = encodeURIComponent(link.url);
-        setThumb(`https://api.microlink.io/?url=${u}&screenshot=true&meta=false&embed=screenshot.url`);
-      }
-    })();
+    let p = thumbInflight.get(taskId);
+    if (!p) {
+      p = resolveThumb(taskId)
+        .catch(() => null)
+        .then((v) => { thumbCache.set(taskId, v); thumbInflight.delete(taskId); return v; });
+      thumbInflight.set(taskId, p);
+    }
+    void p.then((v) => { if (!canceled) setThumb(v); });
     return () => { canceled = true; };
   }, [taskId]);
   return thumb;
 }
+
