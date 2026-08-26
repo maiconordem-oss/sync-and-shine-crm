@@ -840,58 +840,19 @@ function PJRow({
         <div className="border-t bg-muted/10 p-4 space-y-4">
 
           {/* Conferência do mês */}
-          <div className={cn(
-            "rounded-lg border p-3 text-sm",
-            row.diff !== 0 ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/40",
-          )}>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-sm">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
               Conferência do mês
             </div>
             <div className="space-y-1">
               <div className="flex justify-between"><span>Soma das tarefas externas</span><span className="font-medium">{formatBRL(row.sumTasks)}</span></div>
-              <div className="flex justify-between"><span>Soma dos pagamentos vinculados</span><span className="font-medium">{formatBRL(row.sumLinkedPayments)}</span></div>
               <div className="flex justify-between"><span>Pagamentos avulsos</span><span className="font-medium">{formatBRL(row.sumManual)}</span></div>
-              <div className={cn("flex justify-between border-t pt-1 mt-1", row.diffPartial !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
-                <span>Diferença por pagamento parcial</span><span>{formatBRL(row.diffPartial)}</span>
-              </div>
-              <div className={cn("flex justify-between", row.diffMissing !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
-                <span>Diferença por tarefa sem pagamento</span><span>{formatBRL(row.diffMissing)}</span>
-              </div>
-              <div className={cn("flex justify-between border-t pt-1 mt-1 font-semibold", row.diff !== 0 ? "text-amber-800" : "text-emerald-800")}>
-                <span>Diferença total</span><span>{formatBRL(row.diff)}</span>
+              <div className="flex justify-between border-t pt-1 mt-1 font-semibold text-emerald-800">
+                <span>Total do mês</span><span>{formatBRL(row.sumTasks + row.sumManual)}</span>
               </div>
             </div>
-            {row.unmatchedTasks.length > 0 && (
-              <div className="mt-2 text-xs text-amber-900">
-                <div className="font-medium mb-1">Tarefas sem pagamento vinculado:</div>
-                <ul className="space-y-0.5">
-                  {row.unmatchedTasks.map((t) => (
-                    <li key={t.id}>
-                      <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="hover:underline">
-                        #{t.id.slice(0, 8)} — {t.title} ({formatBRL(Number(t.service_value ?? 0))})
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {row.partialTasks.length > 0 && (
-              <div className="mt-2 text-xs text-amber-900">
-                <div className="font-medium mb-1">Pagamentos com valor diferente da tarefa:</div>
-                <ul className="space-y-0.5">
-                  {row.partialTasks.map(({ task, payment, gap }) => (
-                    <li key={task.id}>
-                      <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="hover:underline">
-                        #{task.id.slice(0, 8)} — {task.title}
-                      </Link>{" "}
-                      — pagamento de {formatBRL(Number(payment.amount))} para tarefa de {formatBRL(Number(task.service_value ?? 0))}
-                      {gap > 0 ? ` (faltam ${formatBRL(gap)})` : ` (excedente de ${formatBRL(Math.abs(gap))})`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
+
 
 
 
