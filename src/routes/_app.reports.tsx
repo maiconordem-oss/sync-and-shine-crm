@@ -132,13 +132,9 @@ interface PJRow {
   closure: Closure | null;
   /** Conferência do mês */
   sumTasks: number;
-  sumLinkedPayments: number;
   sumManual: number;
-  diff: number;
   unmatchedTasks: TaskRow[];
-  diffPartial: number;
-  diffMissing: number;
-  partialTasks: { task: TaskRow; payment: PaymentRow; gap: number }[];
+
 
 }
 
@@ -612,31 +608,18 @@ function AdminView() {
       : 0;
     // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
-    // Conferência: tarefas externas x pagamentos vinculados
+    // Conferência: tarefas externas do mês (base do cálculo) + avulsos
     const valuedTasks = pjTasks.filter((t) => Number(t.service_value ?? 0) > 0 && t.status !== "canceled");
     const sumTasks = valuedTasks.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
     const linked = pjPayments.filter((p) => p.task_id && monthTaskIds.has(p.task_id));
-    const sumLinkedPayments = linked.reduce((s, p) => s + Number(p.amount), 0);
     const linkedTaskIds = new Set(linked.map((p) => p.task_id));
     const unmatchedTasks = valuedTasks.filter((t) => !linkedTaskIds.has(t.id));
-    const diffMissing = Number(unmatchedTasks.reduce((s, t) => s + Number(t.service_value ?? 0), 0).toFixed(2));
-    // Pagamento vinculado com valor diferente do valor da tarefa (pagamento parcial)
-    const partialTasks = valuedTasks
-      .map((t) => {
-        const pay = linked.find((p) => p.task_id === t.id);
-        if (!pay) return null;
-        const gap = Number((Number(t.service_value ?? 0) - Number(pay.amount)).toFixed(2));
-        return gap !== 0 ? { task: t, payment: pay, gap } : null;
-      })
-      .filter(Boolean) as { task: TaskRow; payment: PaymentRow; gap: number }[];
-    const diffPartial = Number(partialTasks.reduce((s, x) => s + x.gap, 0).toFixed(2));
-    const diff = Number((sumTasks - sumLinkedPayments).toFixed(2));
     return {
       pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask,
       payments: pjPayments, tasks: pjTasks, closure: closureForPj,
-      sumTasks, sumLinkedPayments, sumManual: manualTotal, diff, unmatchedTasks,
-      diffPartial, partialTasks, diffMissing,
+      sumTasks, sumManual: manualTotal, unmatchedTasks,
     };
+
 
 
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
@@ -764,7 +747,6 @@ function AdminView() {
                   onMarkPaid={() => markPaid(r.pj.id)}
                   onReopen={() => reopenClosure(r.pj.id)}
                   userId={user?.id ?? null}
-                  onReload={() => { void load(); }}
                 />
               ))}
               {/* Grand total row */}
@@ -798,7 +780,7 @@ function AdminView() {
 }
 
 function PJRow({
-  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId, onReload,
+  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId,
 }: {
   row: PJRow;
   expanded: boolean;
@@ -810,7 +792,7 @@ function PJRow({
   onMarkPaid: () => void;
   onReopen: () => void;
   userId: string | null;
-  onReload: () => void;
+
 }) {
   const { closure } = row;
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
@@ -857,58 +839,19 @@ function PJRow({
         <div className="border-t bg-muted/10 p-4 space-y-4">
 
           {/* Conferência do mês */}
-          <div className={cn(
-            "rounded-lg border p-3 text-sm",
-            row.diff !== 0 ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/40",
-          )}>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-sm">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
               Conferência do mês
             </div>
             <div className="space-y-1">
               <div className="flex justify-between"><span>Soma das tarefas externas</span><span className="font-medium">{formatBRL(row.sumTasks)}</span></div>
-              <div className="flex justify-between"><span>Soma dos pagamentos vinculados</span><span className="font-medium">{formatBRL(row.sumLinkedPayments)}</span></div>
               <div className="flex justify-between"><span>Pagamentos avulsos</span><span className="font-medium">{formatBRL(row.sumManual)}</span></div>
-              <div className={cn("flex justify-between border-t pt-1 mt-1", row.diffPartial !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
-                <span>Diferença por pagamento parcial</span><span>{formatBRL(row.diffPartial)}</span>
-              </div>
-              <div className={cn("flex justify-between", row.diffMissing !== 0 ? "text-amber-800 font-medium" : "text-muted-foreground")}>
-                <span>Diferença por tarefa sem pagamento</span><span>{formatBRL(row.diffMissing)}</span>
-              </div>
-              <div className={cn("flex justify-between border-t pt-1 mt-1 font-semibold", row.diff !== 0 ? "text-amber-800" : "text-emerald-800")}>
-                <span>Diferença total</span><span>{formatBRL(row.diff)}</span>
+              <div className="flex justify-between border-t pt-1 mt-1 font-semibold text-emerald-800">
+                <span>Total do mês</span><span>{formatBRL(row.sumTasks + row.sumManual)}</span>
               </div>
             </div>
-            {row.unmatchedTasks.length > 0 && (
-              <div className="mt-2 text-xs text-amber-900">
-                <div className="font-medium mb-1">Tarefas sem pagamento vinculado:</div>
-                <ul className="space-y-0.5">
-                  {row.unmatchedTasks.map((t) => (
-                    <li key={t.id}>
-                      <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="hover:underline">
-                        #{t.id.slice(0, 8)} — {t.title} ({formatBRL(Number(t.service_value ?? 0))})
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {row.partialTasks.length > 0 && (
-              <div className="mt-2 text-xs text-amber-900">
-                <div className="font-medium mb-1">Pagamentos com valor diferente da tarefa:</div>
-                <ul className="space-y-0.5">
-                  {row.partialTasks.map(({ task, payment, gap }) => (
-                    <li key={task.id}>
-                      <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="hover:underline">
-                        #{task.id.slice(0, 8)} — {task.title}
-                      </Link>{" "}
-                      — pagamento de {formatBRL(Number(payment.amount))} para tarefa de {formatBRL(Number(task.service_value ?? 0))}
-                      {gap > 0 ? ` (faltam ${formatBRL(gap)})` : ` (excedente de ${formatBRL(Math.abs(gap))})`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
+
 
 
 
@@ -930,16 +873,12 @@ function PJRow({
                   const isPaidTask = taskPayment?.status === "paid" || (isPaid && !isCanceled);
                   const isPendingTask = !isPaidTask;
                   const canceledAfterDone = isCanceled && !!t.completed_at;
-                  const doneNoPayment = t.status === "done" && !taskPayment && !isPaid && Number(t.service_value ?? 0) > 0;
-                  const partialGap = taskPayment && Number(t.service_value ?? 0) > 0
-                    ? Number((Number(t.service_value ?? 0) - Number(taskPayment.amount)).toFixed(2))
-                    : 0;
                   return (
                     <div key={t.id} className={cn(
                       "rounded-lg border bg-background p-3 space-y-2",
                       isCanceled && "border-rose-200 bg-rose-50/40",
-                      doneNoPayment && "border-amber-300 bg-amber-50/40",
                     )}>
+
                       {/* Title + value */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -1004,49 +943,14 @@ function PJRow({
                           <span>Pagamento <strong>preservado</strong> — o serviço foi concluído antes do cancelamento. Confira antes de fechar o mês.</span>
                         </div>
                       )}
-                      {doneNoPayment && (
-                        <div className="flex items-start gap-1.5 text-[11px] text-amber-800 bg-amber-100/60 rounded px-2 py-1.5">
-                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span>Tarefa concluída <strong>sem pagamento</strong> registrado. Verifique se foi gerado corretamente.</span>
-                        </div>
-                      )}
-                      {partialGap !== 0 && taskPayment && (
-                        <div className="flex items-start justify-between gap-2 text-[11px] text-amber-800 bg-amber-100/60 rounded px-2 py-1.5">
-                          <span className="flex items-start gap-1.5">
-                            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                            <span>
-                              Pagamento gerado de <strong>{formatBRL(Number(taskPayment.amount))}</strong> para tarefa de{" "}
-                              <strong>{formatBRL(Number(t.service_value ?? 0))}</strong>
-                              {partialGap > 0 ? ` — faltam ${formatBRL(partialGap)}` : ` — excedente de ${formatBRL(Math.abs(partialGap))}`}
-                            </span>
-                          </span>
-                          {can("payments.manage") && taskPayment.status === "pending" && (
-                            <button
-                              className="shrink-0 text-primary hover:underline font-medium"
-                              onClick={async () => {
-                                const { error } = await supabase.from("payments")
-                                  .update({ amount: Number(t.service_value ?? 0) })
-                                  .eq("id", taskPayment.id)
-                                  .eq("status", "pending");
-                                if (error) { toast.error(error.message); return; }
-                                toast.success("Valor do pagamento ajustado.");
-                                onReload();
-                              }}
-                            >
-                              Ajustar para {formatBRL(Number(t.service_value ?? 0))}
-                            </button>
-                          )}
-                        </div>
-                      )}
 
                       {/* Payment action if pending */}
                       {isPendingTask && t.service_value && !isPaid && !isCanceled && (
                         <div className="flex items-center justify-between pt-1 border-t border-dashed">
                           <span className="text-xs text-muted-foreground">
-                            {taskPayment
-                              ? `Aguardando fechamento do mês (gerado em ${formatDate(taskPayment.created_at)})`
-                              : "Nenhum pagamento gerado para esta tarefa"}
+                            Aguardando fechamento do mês
                           </span>
+
                           {!isClosed && (
                             <button
                               onClick={async () => {
@@ -1256,12 +1160,10 @@ function PJRow({
                     size="sm"
                     className="text-xs bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => {
-                      if (row.diff !== 0) {
+                      if (row.unmatchedTasks.length > 0) {
                         const ok = window.confirm(
-                          `Atenção: há divergência de ${formatBRL(row.diff)} entre as tarefas externas (${formatBRL(row.sumTasks)}) e os pagamentos vinculados (${formatBRL(row.sumLinkedPayments)}) deste mês.\n\n` +
-                          (row.unmatchedTasks.length > 0
-                            ? `Tarefas sem pagamento vinculado: ${row.unmatchedTasks.length}\n\n`
-                            : "") +
+                          `Atenção: ${row.unmatchedTasks.length} tarefa(s) externa(s) deste mês ainda não têm pagamento vinculado.\n\n` +
+                          `Total do mês pelas tarefas: ${formatBRL(row.sumTasks + row.sumManual)}\n\n` +
                           "Deseja registrar o pagamento mesmo assim?"
                         );
                         if (!ok) return;
