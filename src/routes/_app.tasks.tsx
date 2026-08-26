@@ -157,8 +157,6 @@ function TasksPage() {
   // Persistência local dos filtros
   const FILTERS_KEY = "tasks.filters.v2";
   const filtersHydrated = useRef(false);
-  const savedAssignee = useRef<string | null>(null);
-  const assigneeDefaulted = useRef(false);
   useEffect(() => {
     // StrictMode reexecuta o efeito: sem esta trava, a segunda execução relê o
     // valor provisório que a persistência acabou de gravar e sobrescreve o padrão.
@@ -172,10 +170,7 @@ function TasksPage() {
         if (typeof s.search === "string") setSearch(s.search);
         if (s.filterProject) setFilterProject(s.filterProject);
         // v1 de propósito não traz o filtro de responsável: o padrão passa a ser "minhas tarefas"
-        if (rawV2 && s.filterAssignee) {
-          savedAssignee.current = s.filterAssignee;
-          setFilterAssignee(s.filterAssignee);
-        }
+        if (rawV2 && s.filterAssignee) setFilterAssignee(s.filterAssignee);
         if (s.filterPriority) setFilterPriority(s.filterPriority);
         if (s.filterStatus) setFilterStatus(s.filterStatus);
         if (s.filterType) setFilterType(s.filterType);
@@ -189,13 +184,6 @@ function TasksPage() {
     filtersHydrated.current = true;
   }, []);
 
-  // Quem enxerga tarefas de todos (gestor) começa vendo apenas as próprias tarefas;
-  // pode trocar para "Todos" no filtro de Responsável e a escolha fica salva.
-  useEffect(() => {
-    if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
-    assigneeDefaulted.current = true;
-    if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
-  }, [loading, user, isAdmin]);
   useEffect(() => {
     // Só grava depois da autenticação resolver, para não salvar o filtro provisório
     // antes do padrão "Minhas tarefas" ser aplicado.
