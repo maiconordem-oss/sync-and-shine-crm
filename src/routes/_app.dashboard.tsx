@@ -38,30 +38,80 @@ function DashboardPage() {
     void (async () => {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const today = new Date().toISOString();
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-      const [my, over, week, pay, payAmt, runs, up] = await Promise.all([
+      let payQuery = supabase
+        .from("payments")
+        .select("id,amount,due_date,beneficiary_user_id,task_id")
+        .eq("status", "pending")
+        .gt("amount", 0);
+      if (!isManagerOrAdmin) payQuery = payQuery.eq("beneficiary_user_id", user.id);
+
+      const [my, over, week, payRows, closures, runs, up] = await Promise.all([
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).neq("status", "done"),
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).lt("due_date", today).neq("status", "done"),
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).eq("status", "done").gte("updated_at", weekAgo),
-        supabase.from("payments").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("payments").select("amount").eq("status", "pending"),
+        payQuery,
+        supabase.from("monthly_closures").select("pj_user_id,status").eq("reference_month", currentMonth),
         supabase.from("automation_runs").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
         supabase.from("tasks").select("id,title,due_date,status").eq("assignee_id", user.id).neq("status", "done").not("due_date", "is", null).order("due_date", { ascending: true }).limit(6),
       ]);
 
-      const totalPending = ((payAmt.data ?? []) as { amount: number }[]).reduce((s, r) => s + Number(r.amount), 0);
+      const rows = (payRows.data ?? []) as {
+        id: string;
+        amount: number;
+        due_date: string | null;
+        beneficiary_user_id: string | null;
+        task_id: string | null;
+      }[];
+
+      // Resolve o mês pelo mesmo critério do relatório PJ (data de referência da tarefa)
+      const taskIds = rows.map((r) => r.task_id).filter((v): v is string => !!v);
+      const taskMonth = new Map<string, string>();
+      if (taskIds.length > 0) {
+        const { data: taskRows } = await supabase
+          .from("tasks")
+          .select("id,completed_at,approved_at,canceled_at,created_at")
+          .in("id", taskIds);
+        ((taskRows ?? []) as {
+          id: string;
+          completed_at: string | null;
+          approved_at: string | null;
+          canceled_at: string | null;
+          created_at: string;
+        }[]).forEach((t) => {
+          const ref = t.completed_at ?? t.approved_at ?? t.canceled_at ?? t.created_at;
+          taskMonth.set(t.id, ref.slice(0, 7));
+        });
+      }
+
+      const closedPjs = new Set(
+        ((closures.data ?? []) as { pj_user_id: string; status: string }[])
+          .filter((c) => c.status === "closed" || c.status === "paid")
+          .map((c) => c.pj_user_id),
+      );
+
+      const monthRows = rows.filter((r) => {
+        const month = (r.task_id && taskMonth.get(r.task_id)) || (r.due_date ? r.due_date.slice(0, 7) : null);
+        if (month !== currentMonth) return false;
+        if (r.beneficiary_user_id && closedPjs.has(r.beneficiary_user_id)) return false;
+        return true;
+      });
+
+      const totalPending = monthRows.reduce((s, r) => s + Number(r.amount), 0);
 
       setStats({
         myTasks: my.count ?? 0,
         overdue: over.count ?? 0,
         doneWeek: week.count ?? 0,
-        pendingPayments: pay.count ?? 0,
+        pendingPayments: monthRows.length,
         pendingTotal: totalPending,
         recentRuns: runs.count ?? 0,
       });
       setUpcoming((up.data ?? []) as UpcomingTask[]);
     })();
-  }, [user]);
+  }, [user, isManagerOrAdmin]);
 
   return (
     <div className="space-y-6">
