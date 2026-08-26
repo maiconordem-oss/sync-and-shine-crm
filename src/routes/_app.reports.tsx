@@ -597,7 +597,20 @@ function AdminView() {
       : 0;
     // Pendente do mês = total a pagar menos o já pago
     const totalPending = Math.max(0, totalToPay - totalPaid);
-    return { pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask, payments: pjPayments, tasks: pjTasks, closure: closureForPj };
+    // Conferência: tarefas externas x pagamentos vinculados
+    const valuedTasks = pjTasks.filter((t) => Number(t.service_value ?? 0) > 0 && t.status !== "canceled");
+    const sumTasks = valuedTasks.reduce((s, t) => s + Number(t.service_value ?? 0), 0);
+    const linked = pjPayments.filter((p) => p.task_id && monthTaskIds.has(p.task_id));
+    const sumLinkedPayments = linked.reduce((s, p) => s + Number(p.amount), 0);
+    const linkedTaskIds = new Set(linked.map((p) => p.task_id));
+    const unmatchedTasks = valuedTasks.filter((t) => !linkedTaskIds.has(t.id));
+    const diff = Number((sumTasks - sumLinkedPayments).toFixed(2));
+    return {
+      pj, totalPending, totalPaid, totalToPay, completedTasks, avgPerTask,
+      payments: pjPayments, tasks: pjTasks, closure: closureForPj,
+      sumTasks, sumLinkedPayments, sumManual: manualTotal, diff, unmatchedTasks,
+    };
+
   }).sort((a, b) => b.totalToPay - a.totalToPay), [pjs, payments, tasks, closures, startDate, endDate, startISO, endISO]);
 
   const grandTotals = useMemo(() => rows.reduce((acc, r) => ({
