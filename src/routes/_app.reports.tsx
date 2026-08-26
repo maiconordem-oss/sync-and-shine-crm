@@ -826,6 +826,40 @@ function PJRow({
       {expanded && (
         <div className="border-t bg-muted/10 p-4 space-y-4">
 
+          {/* Conferência do mês */}
+          <div className={cn(
+            "rounded-lg border p-3 text-sm",
+            row.diff !== 0 ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/40",
+          )}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              Conferência do mês
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between"><span>Soma das tarefas externas</span><span className="font-medium">{formatBRL(row.sumTasks)}</span></div>
+              <div className="flex justify-between"><span>Soma dos pagamentos vinculados</span><span className="font-medium">{formatBRL(row.sumLinkedPayments)}</span></div>
+              <div className="flex justify-between"><span>Pagamentos avulsos</span><span className="font-medium">{formatBRL(row.sumManual)}</span></div>
+              <div className={cn("flex justify-between border-t pt-1 mt-1 font-semibold", row.diff !== 0 ? "text-amber-800" : "text-emerald-800")}>
+                <span>Diferença</span><span>{formatBRL(row.diff)}</span>
+              </div>
+            </div>
+            {row.diff !== 0 && row.unmatchedTasks.length > 0 && (
+              <div className="mt-2 text-xs text-amber-900">
+                <div className="font-medium mb-1">Tarefas sem pagamento vinculado:</div>
+                <ul className="space-y-0.5">
+                  {row.unmatchedTasks.map((t) => (
+                    <li key={t.id}>
+                      <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="hover:underline">
+                        #{t.id.slice(0, 8)} — {t.title} ({formatBRL(Number(t.service_value ?? 0))})
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+
+
           {/* Tasks — rich cards */}
           {row.tasks.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-4">
