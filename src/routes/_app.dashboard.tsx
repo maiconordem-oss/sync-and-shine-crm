@@ -41,71 +41,86 @@ function DashboardPage() {
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-      let payQuery = supabase
-        .from("payments")
-        .select("id,amount,due_date,beneficiary_user_id,task_id")
-        .eq("status", "pending")
-        .gt("amount", 0);
-      if (!isManagerOrAdmin) payQuery = payQuery.eq("beneficiary_user_id", user.id);
+      // Mesma base do Relatório PJ: tarefas externas do mês + pagamentos avulsos,
+      // descontando fechamentos já pagos.
+      const startDate = `${currentMonth}-01`;
+      const startISO = new Date(`${startDate}T00:00:00`).toISOString();
+      const endISO = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+      const endDate = endISO.slice(0, 10);
 
-      const [my, over, week, payRows, closures, runs, up] = await Promise.all([
+      let manualQuery = supabase
+        .from("payments")
+        .select("id,amount,due_date,created_at,beneficiary_user_id,task_id,status")
+        .eq("status", "pending")
+        .is("task_id", null)
+        .gt("amount", 0);
+      if (!isManagerOrAdmin) manualQuery = manualQuery.eq("beneficiary_user_id", user.id);
+
+      const [my, over, week, reportTasks, manualRes, closures, runs, up] = await Promise.all([
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).neq("status", "done"),
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).lt("due_date", today).neq("status", "done"),
         supabase.from("tasks").select("id", { count: "exact", head: true }).eq("assignee_id", user.id).eq("status", "done").gte("updated_at", weekAgo),
-        payQuery,
-        supabase.from("monthly_closures").select("pj_user_id,status").eq("reference_month", currentMonth),
+        supabase.rpc("get_pj_tasks_for_report", { start_iso: startISO, end_iso: endISO }),
+        manualQuery,
+        supabase.from("monthly_closures").select("pj_user_id,status,total_amount").eq("reference_month", currentMonth),
         supabase.from("automation_runs").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
         supabase.from("tasks").select("id,title,due_date,status").eq("assignee_id", user.id).neq("status", "done").not("due_date", "is", null).order("due_date", { ascending: true }).limit(6),
       ]);
 
-      const rows = (payRows.data ?? []) as {
-        id: string;
-        amount: number;
-        due_date: string | null;
-        beneficiary_user_id: string | null;
-        task_id: string | null;
-      }[];
-
-      // Resolve o mês pelo mesmo critério do relatório PJ (data de referência da tarefa)
-      const taskIds = rows.map((r) => r.task_id).filter((v): v is string => !!v);
-      const taskMonth = new Map<string, string>();
-      if (taskIds.length > 0) {
-        const { data: taskRows } = await supabase
-          .from("tasks")
-          .select("id,completed_at,approved_at,canceled_at,created_at")
-          .in("id", taskIds);
-        ((taskRows ?? []) as {
-          id: string;
-          completed_at: string | null;
-          approved_at: string | null;
-          canceled_at: string | null;
-          created_at: string;
-        }[]).forEach((t) => {
-          const ref = t.completed_at ?? t.approved_at ?? t.canceled_at ?? t.created_at;
-          taskMonth.set(t.id, ref.slice(0, 7));
-        });
-      }
-
-      const closedPjs = new Set(
-        ((closures.data ?? []) as { pj_user_id: string; status: string }[])
-          .filter((c) => c.status === "closed" || c.status === "paid")
-          .map((c) => c.pj_user_id),
-      );
-
-      const monthRows = rows.filter((r) => {
-        const month = (r.task_id && taskMonth.get(r.task_id)) || (r.due_date ? r.due_date.slice(0, 7) : null);
-        if (month !== currentMonth) return false;
-        if (r.beneficiary_user_id && closedPjs.has(r.beneficiary_user_id)) return false;
-        return true;
+      const perPj = new Map<string, { toPay: number; count: number }>();
+      ((reportTasks.data ?? []) as {
+        assignee_id: string | null;
+        service_value: number | null;
+        status: string;
+      }[]).forEach((t) => {
+        if (!t.assignee_id) return;
+        if (t.status === "canceled") return;
+        const value = Number(t.service_value ?? 0);
+        if (value <= 0) return;
+        if (!isManagerOrAdmin && t.assignee_id !== user.id) return;
+        const cur = perPj.get(t.assignee_id) ?? { toPay: 0, count: 0 };
+        cur.toPay += value;
+        cur.count += 1;
+        perPj.set(t.assignee_id, cur);
       });
 
-      const totalPending = monthRows.reduce((s, r) => s + Number(r.amount), 0);
+      ((manualRes.data ?? []) as {
+        amount: number;
+        due_date: string | null;
+        created_at: string;
+        beneficiary_user_id: string | null;
+      }[]).forEach((p) => {
+        if (!p.beneficiary_user_id) return;
+        const inMonth = p.due_date
+          ? p.due_date >= startDate && p.due_date < endDate
+          : p.created_at >= startISO && p.created_at < endISO;
+        if (!inMonth) return;
+        const cur = perPj.get(p.beneficiary_user_id) ?? { toPay: 0, count: 0 };
+        cur.toPay += Number(p.amount);
+        cur.count += 1;
+        perPj.set(p.beneficiary_user_id, cur);
+      });
+
+      const closureMap = new Map(
+        ((closures.data ?? []) as { pj_user_id: string; status: string; total_amount: number | null }[])
+          .map((c) => [c.pj_user_id, c]),
+      );
+
+      let totalPending = 0;
+      let pendingCount = 0;
+      perPj.forEach((v, pjId) => {
+        const closure = closureMap.get(pjId);
+        const paid = closure && closure.status === "paid" ? Number(closure.total_amount ?? 0) : 0;
+        const pending = Math.max(0, v.toPay - paid);
+        totalPending += pending;
+        if (pending > 0) pendingCount += v.count;
+      });
 
       setStats({
         myTasks: my.count ?? 0,
         overdue: over.count ?? 0,
         doneWeek: week.count ?? 0,
-        pendingPayments: monthRows.length,
+        pendingPayments: pendingCount,
         pendingTotal: totalPending,
         recentRuns: runs.count ?? 0,
       });
