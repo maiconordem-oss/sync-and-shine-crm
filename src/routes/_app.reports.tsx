@@ -797,7 +797,7 @@ function AdminView() {
 }
 
 function PJRow({
-  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId,
+  row, expanded, onToggle, notes, onNotesChange, busy, onClose, onMarkPaid, onReopen, userId, onReload,
 }: {
   row: PJRow;
   expanded: boolean;
@@ -809,6 +809,7 @@ function PJRow({
   onMarkPaid: () => void;
   onReopen: () => void;
   userId: string | null;
+  onReload: () => void;
 }) {
   const { closure } = row;
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
