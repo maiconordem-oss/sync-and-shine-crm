@@ -157,8 +157,6 @@ function TasksPage() {
   // Persistência local dos filtros
   const FILTERS_KEY = "tasks.filters.v2";
   const filtersHydrated = useRef(false);
-  const savedAssignee = useRef<string | null>(null);
-  const assigneeDefaulted = useRef(false);
   useEffect(() => {
     // StrictMode reexecuta o efeito: sem esta trava, a segunda execução relê o
     // valor provisório que a persistência acabou de gravar e sobrescreve o padrão.
@@ -172,10 +170,7 @@ function TasksPage() {
         if (typeof s.search === "string") setSearch(s.search);
         if (s.filterProject) setFilterProject(s.filterProject);
         // v1 de propósito não traz o filtro de responsável: o padrão passa a ser "minhas tarefas"
-        if (rawV2 && s.filterAssignee) {
-          savedAssignee.current = s.filterAssignee;
-          setFilterAssignee(s.filterAssignee);
-        }
+        if (rawV2 && s.filterAssignee) setFilterAssignee(s.filterAssignee);
         if (s.filterPriority) setFilterPriority(s.filterPriority);
         if (s.filterStatus) setFilterStatus(s.filterStatus);
         if (s.filterType) setFilterType(s.filterType);
@@ -189,13 +184,6 @@ function TasksPage() {
     filtersHydrated.current = true;
   }, []);
 
-  // Quem enxerga tarefas de todos (gestor) começa vendo apenas as próprias tarefas;
-  // pode trocar para "Todos" no filtro de Responsável e a escolha fica salva.
-  useEffect(() => {
-    if (assigneeDefaulted.current || !filtersHydrated.current || loading || !user) return;
-    assigneeDefaulted.current = true;
-    if (savedAssignee.current === null && !isAdmin) setFilterAssignee("mine");
-  }, [loading, user, isAdmin]);
   useEffect(() => {
     // Só grava depois da autenticação resolver, para não salvar o filtro provisório
     // antes do padrão "Minhas tarefas" ser aplicado.
@@ -253,9 +241,12 @@ function TasksPage() {
         if (!inTitle && !inDesc && !inTags) return false;
       }
       if (filterProject !== "all" && t.project_id !== filterProject) return false;
-      if (filterAssignee === "mine") {
+      // Somente admin enxerga tarefas de todos; gestor e membro veem sempre
+      // apenas as tarefas que criaram ou das quais são responsáveis.
+      const effAssignee = isAdmin ? filterAssignee : "mine";
+      if (effAssignee === "mine") {
         if (t.assignee_id !== user?.id && t.created_by !== user?.id) return false;
-      } else if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
+      } else if (effAssignee !== "all" && t.assignee_id !== effAssignee) return false;
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterType !== "all" && t.task_type !== filterType) return false;
@@ -281,7 +272,7 @@ function TasksPage() {
 
       return true;
     });
-  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo, user?.id]);
+  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo, user?.id, isAdmin]);
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
@@ -290,7 +281,7 @@ function TasksPage() {
   const overdueCount = filtered.filter((t) => isOverdue(t.due_date) && t.status !== "done").length;
   const inProgressCount = filtered.filter((t) => t.status === "in_progress").length;
   const hasActiveFilter =
-    filterProject !== "all" || filterAssignee !== "all" || filterPriority !== "all" ||
+    filterProject !== "all" || (isAdmin && filterAssignee !== "all") || filterPriority !== "all" ||
     filterStatus !== "all" || filterType !== "all" || filterDue !== "all" ||
     filterTags.length > 0 || !!createdFrom || !!createdTo;
 
@@ -462,14 +453,16 @@ function TasksPage() {
               {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-            <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">Todos</SelectItem>
-              <SelectItem value="mine" className="text-xs">Minhas tarefas</SelectItem>
-              {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {isAdmin && (
+            <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+              <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">Todos</SelectItem>
+                <SelectItem value="mine" className="text-xs">Minhas tarefas</SelectItem>
+                {profiles.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.full_name ?? "—"}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={filterPriority} onValueChange={setFilterPriority}>
             <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="Prioridade" /></SelectTrigger>
             <SelectContent>
@@ -526,7 +519,7 @@ function TasksPage() {
         <div className="flex flex-wrap gap-1.5 items-center text-xs">
           {filterStatus !== "all" && <FilterChip label={`Status: ${STATUS_LABEL[filterStatus] ?? filterStatus}`} onRemove={() => setFilterStatus("all")} />}
           {filterProject !== "all" && <FilterChip label={`Projeto: ${projectById(filterProject)?.name ?? "—"}`} onRemove={() => setFilterProject("all")} />}
-          {filterAssignee !== "all" && <FilterChip label={filterAssignee === "mine" ? "Minhas tarefas" : `Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
+          {isAdmin && filterAssignee !== "all" && <FilterChip label={filterAssignee === "mine" ? "Minhas tarefas" : `Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
           {filterPriority !== "all" && <FilterChip label={`Prioridade: ${PRIORITY_LABEL[filterPriority] ?? filterPriority}`} onRemove={() => setFilterPriority("all")} />}
           {filterType !== "all" && <FilterChip label={typeLabel(filterType)} onRemove={() => setFilterType("all")} />}
           {filterDue !== "all" && <FilterChip label={dueLabel(filterDue)} onRemove={() => setFilterDue("all")} />}
