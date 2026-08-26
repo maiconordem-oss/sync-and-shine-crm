@@ -366,7 +366,16 @@ function PJView({ userId }: { userId: string }) {
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.created_at ? new Date(t.created_at).toLocaleDateString("pt-BR") : "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.due_date ? new Date(t.due_date).toLocaleDateString("pt-BR") : "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs align-top">{t.completed_at ? new Date(t.completed_at).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td className="p-3 text-xs align-top">
+                          <span className={cn(t.incomplete_record ? "text-amber-800 font-medium" : "text-muted-foreground")}>
+                            {refLabel(t)}
+                          </span>
+                          {t.reference_at && (
+                            <div className="text-[10px] text-muted-foreground">{new Date(t.reference_at).toLocaleDateString("pt-BR")}</div>
+                          )}
+                        </td>
                         <td className="p-3 text-right font-semibold align-top">{t.service_value ? formatBRL(t.service_value) : "—"}</td>
+
                         <td className="p-3 align-top">
                           <Badge className={cn("text-xs", {
                             "bg-rose-100 text-rose-800": isCanc,
