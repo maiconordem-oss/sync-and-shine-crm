@@ -136,7 +136,7 @@ function TaskDetailPage() {
     const previousAssignee = task.assignee_id;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("tasks").update(patch as any).eq("id", task.id).select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(error.message); void load(); return; }
     const updated = data as TaskFull;
     setTask(updated);
     if (user) {
@@ -498,8 +498,11 @@ function TaskDetailPage() {
                     onChange={(e) => setTask({ ...task, service_value: e.target.value ? Number(e.target.value) : null })}
                     onBlur={(e) => void update({ service_value: e.target.value ? Number(e.target.value) : null })}
                     placeholder="Gera pagamento ao concluir"
-                    disabled={!canEditTask}
+                    disabled={!isManagerOrAdmin}
                   />
+                  {!isManagerOrAdmin && (
+                    <p className="text-xs text-muted-foreground">Somente Admin ou Gestor pode alterar o valor.</p>
+                  )}
                 </Field>
               )}
               <Field label="Projeto">
