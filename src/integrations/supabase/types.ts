@@ -1029,6 +1029,13 @@ export type Database = {
           title: string
         }[]
       }
+      get_profile_emails: {
+        Args: never
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
