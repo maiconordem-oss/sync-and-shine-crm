@@ -173,14 +173,16 @@ function PJView({ userId }: { userId: string }) {
         supabase.from("payments").select("*").eq("beneficiary_user_id", userId).order("created_at", { ascending: false }),
         supabase.from("monthly_closures").select("*").eq("pj_user_id", userId).order("reference_month", { ascending: false }),
         supabase.rpc("get_pj_tasks_for_report", { start_iso: startISO, end_iso: endISO }),
-        supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("id,full_name,contract_type").eq("id", userId).maybeSingle(),
       ]);
       const { data: emailRows } = await supabase.rpc("get_profile_emails");
+      const { data: billingRows } = await supabase.rpc("get_billing_profiles");
       const email = (emailRows ?? []).find((row) => row.id === userId)?.email ?? "";
+      const billing = (billingRows ?? []).find((row) => row.id === userId);
       setPayments((p.data ?? []) as PaymentRow[]);
       setClosures((c.data ?? []) as Closure[]);
       setTasks(((t.data ?? []) as TaskRow[]).filter((x) => x.assignee_id === userId));
-      setProfile(prof.data ? ({ ...prof.data, email } as PJProfile) : null);
+      setProfile(prof.data ? ({ ...prof.data, ...(billing ?? {}), email } as PJProfile) : null);
       setLoading(false);
     };
     void load();
