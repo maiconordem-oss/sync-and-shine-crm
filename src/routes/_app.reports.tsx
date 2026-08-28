@@ -660,9 +660,12 @@ function AdminView() {
       allPayments = Array.from(byId.values());
     }
     const { data: emailRows } = await supabase.rpc("get_profile_emails");
+    const { data: billingRows } = await supabase.rpc("get_billing_profiles");
     const emailMap = new Map((emailRows ?? []).map((row) => [row.id, row.email]));
-    setPjs(((pjRes.data ?? []) as Omit<PJProfile, "email">[]).map((p) => ({
+    const billingMap = new Map((billingRows ?? []).map((row) => [row.id, row]));
+    setPjs(((pjRes.data ?? []) as { id: string; full_name: string | null; contract_type: string | null }[]).map((p) => ({
       ...p,
+      ...(billingMap.get(p.id) ?? {}),
       email: emailMap.get(p.id) ?? "",
     })) as PJProfile[]);
     setPayments(allPayments);
