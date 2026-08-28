@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback, Fragment, useRef } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,8 @@ import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/labels";
+import { buildPixPayload } from "@/lib/pix";
+import { QRCodeSVG } from "qrcode.react";
 
 export const Route = createFileRoute("/_app/reports")({
   component: ReportsPage,
@@ -26,6 +29,11 @@ interface PJProfile {
   full_name: string | null;
   email: string | null;
   contract_type: "clt" | "pj";
+  cnpj?: string | null;
+  legal_name?: string | null;
+  pix_key_type?: string | null;
+  pix_key?: string | null;
+  bank_name?: string | null;
 }
 
 interface PaymentRow {
@@ -85,6 +93,9 @@ interface Closure {
   notes: string | null;
   closed_at: string | null;
   paid_at: string | null;
+  invoice_path: string | null;
+  invoice_name: string | null;
+  invoice_uploaded_at: string | null;
 }
 
 function monthBounds(yyyymm: string) {
@@ -150,6 +161,8 @@ function PJView({ userId }: { userId: string }) {
   const [profile, setProfile] = useState<PJProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const invoiceInputRef = useRef<HTMLInputElement>(null);
 
   const { startISO, endISO, startDate, endDate, label: monthLabel } = monthBounds(month);
 
@@ -160,7 +173,7 @@ function PJView({ userId }: { userId: string }) {
         supabase.from("payments").select("*").eq("beneficiary_user_id", userId).order("created_at", { ascending: false }),
         supabase.from("monthly_closures").select("*").eq("pj_user_id", userId).order("reference_month", { ascending: false }),
         supabase.rpc("get_pj_tasks_for_report", { start_iso: startISO, end_iso: endISO }),
-        supabase.from("profiles").select("id,full_name,contract_type").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("id", userId).maybeSingle(),
       ]);
       const { data: emailRows } = await supabase.rpc("get_profile_emails");
       const email = (emailRows ?? []).find((row) => row.id === userId)?.email ?? "";
@@ -195,6 +208,55 @@ function PJView({ userId }: { userId: string }) {
     ? totalToPay
     : monthPayments.filter((p) => p.status === "paid").reduce((s, p) => s + Number(p.amount), 0);
   const totalPending = Math.max(0, totalToPay - totalPaid);
+
+  const uploadInvoice = async (file: File) => {
+    if (!closure || closure.status !== "closed") {
+      toast.error("O mês precisa estar fechado antes do envio da nota fiscal.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("A nota fiscal deve ter no máximo 10 MB.");
+      return;
+    }
+    setUploadingInvoice(true);
+    const extension = (file.name.split(".").pop() ?? "pdf").toLowerCase().replace(/[^a-z0-9]/g, "") || "pdf";
+    const path = `${userId}/${month}-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("invoices").upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+    if (uploadError) {
+      toast.error(uploadError.message);
+      setUploadingInvoice(false);
+      return;
+    }
+    const uploadedAt = new Date().toISOString();
+    const { error: updateError } = await supabase.from("monthly_closures").update({
+      invoice_path: path,
+      invoice_name: file.name,
+      invoice_uploaded_at: uploadedAt,
+    }).eq("id", closure.id);
+    if (updateError) {
+      toast.error(updateError.message);
+      setUploadingInvoice(false);
+      return;
+    }
+    setClosures((current) => current.map((item) => item.id === closure.id
+      ? { ...item, invoice_path: path, invoice_name: file.name, invoice_uploaded_at: uploadedAt }
+      : item));
+    setUploadingInvoice(false);
+    toast.success("Nota fiscal enviada.");
+  };
+
+  const openInvoice = async () => {
+    if (!closure?.invoice_path) return;
+    const { data, error } = await supabase.storage.from("invoices").createSignedUrl(closure.invoice_path, 3600);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message ?? "Não foi possível abrir a nota fiscal.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
 
   const handlePrint = () => {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Meu relatório — ${monthLabel}</title>
@@ -487,6 +549,34 @@ function PJView({ userId }: { userId: string }) {
         </Card>
       )}
 
+      {closure && (
+        <Card className="border-emerald-200">
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Receipt className="h-4 w-4" /> Nota fiscal do mês</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {closure.status === "open" ? (
+              <p className="text-sm text-muted-foreground">A nota fiscal poderá ser enviada assim que o Admin fechar este mês.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">{closure.invoice_name ?? "Nota fiscal ainda não enviada"}</div>
+                    <div className="text-xs text-muted-foreground">{closure.invoice_uploaded_at ? `Enviada em ${formatDateTime(closure.invoice_uploaded_at)}` : "Envie a nota fiscal para liberar o pagamento."}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {closure.invoice_path && <Button size="sm" variant="outline" onClick={() => void openInvoice()}><FileDown className="h-4 w-4 mr-1" /> Ver NF</Button>}
+                    {!closure.invoice_path && <>
+                      <input ref={invoiceInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadInvoice(file); }} />
+                      <Button size="sm" onClick={() => invoiceInputRef.current?.click()} disabled={uploadingInvoice}><Receipt className="h-4 w-4 mr-1" /> {uploadingInvoice ? "Enviando..." : "Enviar nota fiscal"}</Button>
+                    </>}
+                  </div>
+                </div>
+                {closure.status === "closed" && !closure.invoice_path && <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">O pagamento ficará disponível para o Admin depois que a nota fiscal for enviada.</div>}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {closures.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarCheck className="h-4 w-4" /> Histórico de fechamentos</CardTitle></CardHeader>
@@ -545,7 +635,7 @@ function AdminView() {
   const load = useCallback(async () => {
     setLoading(true);
     const [pjRes, payRes, taskRes, closRes] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,contract_type").eq("contract_type", "pj"),
+      supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("contract_type", "pj"),
       // Pagamentos referentes ao mês: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
@@ -668,6 +758,8 @@ function AdminView() {
     setClosureBusy(pjId);
     const existing = closures.find((c) => c.pj_user_id === pjId);
     if (!existing) { toast.error("Feche o mês antes de marcar como pago."); setClosureBusy(null); return; }
+    if (existing.status !== "closed") { toast.error("O fechamento precisa estar fechado antes de marcar como pago."); setClosureBusy(null); return; }
+    if (!existing.invoice_path) { toast.error("A nota fiscal do PJ precisa ser enviada antes de liberar o pagamento."); setClosureBusy(null); return; }
     // Apenas pagamentos do mês selecionado:
     //  - vinculados a tarefas APROVADAS/CONCLUÍDAS neste mês (presentes em `tasks`)
     //  - OU manuais (sem task_id) com vencimento no mês
@@ -807,6 +899,18 @@ function PJRow({
   const isClosed = closure?.status === "closed" || closure?.status === "paid";
   const { can } = useAuth();
   const isPaid = closure?.status === "paid";
+  const [pixOpen, setPixOpen] = useState(false);
+  const pixPayload = row.pj.pix_key ? buildPixPayload({ key: row.pj.pix_key, amount: row.totalToPay, name: row.pj.legal_name ?? row.pj.full_name ?? "Prestador PJ" }) : "";
+
+  const openInvoice = async () => {
+    if (!closure?.invoice_path) return;
+    const { data, error } = await supabase.storage.from("invoices").createSignedUrl(closure.invoice_path, 3600);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message ?? "Não foi possível abrir a nota fiscal.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="border-t">
@@ -1068,7 +1172,29 @@ function PJRow({
               </div>
             )}
 
+            {isClosed && (
+              <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs", closure?.invoice_path ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/60")}>
+                <span>{closure?.invoice_path ? `NF recebida${closure.invoice_name ? `: ${closure.invoice_name}` : ""}` : "Aguardando envio da nota fiscal pelo PJ"}</span>
+                {closure?.invoice_path && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void openInvoice()}><FileDown className="h-3.5 w-3.5 mr-1" /> Ver NF</Button>}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
+              {row.pj.pix_key && row.totalToPay > 0 && (
+                <Dialog open={pixOpen} onOpenChange={setPixOpen}>
+                  <Button size="sm" variant="outline" className="text-xs" onClick={() => setPixOpen(true)}><Wallet className="h-3.5 w-3.5 mr-1" /> PIX</Button>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Pagamento PIX — {row.pj.full_name ?? "Prestador PJ"}</DialogTitle></DialogHeader>
+                    <div className="flex flex-col items-center gap-3 py-2">
+                      <QRCodeSVG value={pixPayload} size={210} includeMargin />
+                      <div className="text-lg font-semibold">{formatBRL(row.totalToPay)}</div>
+                      <p className="text-xs text-muted-foreground text-center">Chave {row.pj.pix_key_type ?? "PIX"}: {row.pj.pix_key}</p>
+                      <Textarea readOnly value={pixPayload} className="min-h-24 text-[10px]" />
+                    </div>
+                    <DialogFooter><Button onClick={() => { void navigator.clipboard.writeText(pixPayload); toast.success("Código PIX copiado."); }}>Copiar código PIX</Button></DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
               {can("reports.export") && <Button
                 size="sm"
                 variant="outline"
