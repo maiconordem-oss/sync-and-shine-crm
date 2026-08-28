@@ -81,6 +81,11 @@ function ProfilePage() {
     const { error } = await supabase.from("profiles").update({
       full_name: fullName.trim() || null,
       job_title: jobTitle.trim() || null,
+      cnpj: cnpj.trim() || null,
+      legal_name: legalName.trim() || null,
+      pix_key_type: pixKeyType || null,
+      pix_key: pixKey.trim() || null,
+      bank_name: bankName.trim() || null,
     }).eq("id", user.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
