@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { initials, formatDateTime } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/labels";
 import { toast } from "sonner";
-import { Camera, User, Briefcase, Mail, Shield, Volume2, VolumeX, Save, Loader2 } from "lucide-react";
+import { Camera, User, Briefcase, Mail, Shield, Volume2, VolumeX, Save, Loader2, WalletCards } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/profile")({
