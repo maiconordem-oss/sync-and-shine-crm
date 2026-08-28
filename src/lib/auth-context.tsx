@@ -12,6 +12,11 @@ export interface Profile {
   job_title: string | null;
   contract_type: "clt" | "pj" | null;
   sound_enabled: boolean;
+  cnpj: string | null;
+  legal_name: string | null;
+  pix_key_type: string | null;
+  pix_key: string | null;
+  bank_name: string | null;
 }
 
 interface AuthContextValue {

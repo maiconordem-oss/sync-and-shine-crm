@@ -303,6 +303,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          invoice_name: string | null
+          invoice_path: string | null
+          invoice_uploaded_at: string | null
           notes: string | null
           paid_at: string | null
           paid_by: string | null
@@ -319,6 +322,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_name?: string | null
+          invoice_path?: string | null
+          invoice_uploaded_at?: string | null
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
@@ -335,6 +341,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          invoice_name?: string | null
+          invoice_path?: string | null
+          invoice_uploaded_at?: string | null
           notes?: string | null
           paid_at?: string | null
           paid_by?: string | null
@@ -460,34 +469,49 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bank_name: string | null
+          cnpj: string | null
           contract_type: Database["public"]["Enums"]["contract_type"]
           created_at: string
           email: string | null
           full_name: string | null
           id: string
           job_title: string | null
+          legal_name: string | null
+          pix_key: string | null
+          pix_key_type: string | null
           sound_enabled: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
+          bank_name?: string | null
+          cnpj?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           full_name?: string | null
           id: string
           job_title?: string | null
+          legal_name?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           sound_enabled?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
+          bank_name?: string | null
+          cnpj?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           full_name?: string | null
           id?: string
           job_title?: string | null
+          legal_name?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           sound_enabled?: boolean
           updated_at?: string
         }
