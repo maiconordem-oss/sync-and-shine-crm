@@ -1305,11 +1305,12 @@ function PJRow({
                         if (!ok) return;
                       }
                       onMarkPaid();
-                    }}
-                    disabled={busy}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    {busy ? "Registrando..." : "Marcar como pago"}
+                     }}
+                     disabled={busy || !closure?.invoice_path}
+                     title={!closure?.invoice_path ? "Aguardando nota fiscal do PJ" : "Registrar pagamento"}
+                   >
+                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                     {busy ? "Registrando..." : "Marcar como pago"}
                   </Button>
 
                   <Button size="sm" variant="outline" className="text-xs" onClick={onReopen} disabled={busy}>
