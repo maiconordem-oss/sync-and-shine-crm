@@ -23,6 +23,11 @@ function ProfilePage() {
   const { user, profile, roles, soundEnabled, setSoundEnabled, refresh } = useAuth();
   const [fullName, setFullName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [pixKeyType, setPixKeyType] = useState("random");
+  const [pixKey, setPixKey] = useState("");
+  const [bankName, setBankName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
