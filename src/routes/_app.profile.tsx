@@ -38,6 +38,11 @@ function ProfilePage() {
     if (profile) {
       setFullName(profile.full_name ?? "");
       setJobTitle(profile.job_title ?? "");
+      setCnpj(profile.cnpj ?? "");
+      setLegalName(profile.legal_name ?? "");
+      setPixKeyType(profile.pix_key_type ?? "random");
+      setPixKey(profile.pix_key ?? "");
+      setBankName(profile.bank_name ?? "");
       setAvatarUrl(profile.avatar_url ?? null);
     }
   }, [profile]);
