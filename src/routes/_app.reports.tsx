@@ -637,7 +637,7 @@ function AdminView() {
   const load = useCallback(async () => {
     setLoading(true);
     const [pjRes, payRes, taskRes, closRes] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("contract_type", "pj"),
+      supabase.from("profiles").select("id,full_name,contract_type").eq("contract_type", "pj"),
       // Pagamentos referentes ao mês: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
