@@ -1029,6 +1029,17 @@ export type Database = {
     Functions: {
       dispatch_scheduled_messages: { Args: never; Returns: number }
       generate_recurring_tasks_for_today: { Args: never; Returns: number }
+      get_billing_profiles: {
+        Args: never
+        Returns: {
+          bank_name: string
+          cnpj: string
+          id: string
+          legal_name: string
+          pix_key: string
+          pix_key_type: string
+        }[]
+      }
       get_pj_tasks_for_report: {
         Args: { end_iso: string; start_iso: string }
         Returns: {
