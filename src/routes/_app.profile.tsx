@@ -203,6 +203,23 @@ function ProfilePage() {
               placeholder="Ex: Designer, Desenvolvedor, Analista..."
             />
           </div>
+          {contractType === "pj" && (
+            <Card className="border-emerald-200">
+              <CardHeader><CardTitle className="text-base flex items-center gap-2"><WalletCards className="h-4 w-4" /> Dados para recebimento</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">Esses dados aparecem para o Admin gerar o pagamento do fechamento mensal.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><Label>CNPJ</Label><Input className="mt-1" value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" /></div>
+                  <div><Label>Razão social</Label><Input className="mt-1" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="Nome empresarial" /></div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><Label>Tipo de chave PIX</Label><Select value={pixKeyType} onValueChange={setPixKeyType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="random">Aleatória</SelectItem><SelectItem value="cpf">CPF</SelectItem><SelectItem value="cnpj">CNPJ</SelectItem><SelectItem value="email">E-mail</SelectItem><SelectItem value="phone">Telefone</SelectItem></SelectContent></Select></div>
+                  <div><Label>Chave PIX</Label><Input className="mt-1" value={pixKey} onChange={(e) => setPixKey(e.target.value)} placeholder="Chave para recebimento" /></div>
+                </div>
+                <div><Label>Banco (opcional)</Label><Input className="mt-1" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Nome do banco" /></div>
+              </CardContent>
+            </Card>
+          )}
           <Button onClick={save} disabled={saving} className="w-full">
             {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="h-4 w-4 mr-2" /> Salvar alterações</>}
           </Button>
