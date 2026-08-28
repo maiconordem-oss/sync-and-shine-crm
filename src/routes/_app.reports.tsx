@@ -173,14 +173,16 @@ function PJView({ userId }: { userId: string }) {
         supabase.from("payments").select("*").eq("beneficiary_user_id", userId).order("created_at", { ascending: false }),
         supabase.from("monthly_closures").select("*").eq("pj_user_id", userId).order("reference_month", { ascending: false }),
         supabase.rpc("get_pj_tasks_for_report", { start_iso: startISO, end_iso: endISO }),
-        supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("id", userId).maybeSingle(),
+        supabase.from("profiles").select("id,full_name,contract_type").eq("id", userId).maybeSingle(),
       ]);
       const { data: emailRows } = await supabase.rpc("get_profile_emails");
+      const { data: billingRows } = await supabase.rpc("get_billing_profiles");
       const email = (emailRows ?? []).find((row) => row.id === userId)?.email ?? "";
+      const billing = (billingRows ?? []).find((row) => row.id === userId);
       setPayments((p.data ?? []) as PaymentRow[]);
       setClosures((c.data ?? []) as Closure[]);
       setTasks(((t.data ?? []) as TaskRow[]).filter((x) => x.assignee_id === userId));
-      setProfile(prof.data ? ({ ...prof.data, email } as PJProfile) : null);
+      setProfile(prof.data ? ({ ...prof.data, ...(billing ?? {}), email } as PJProfile) : null);
       setLoading(false);
     };
     void load();
@@ -635,7 +637,7 @@ function AdminView() {
   const load = useCallback(async () => {
     setLoading(true);
     const [pjRes, payRes, taskRes, closRes] = await Promise.all([
-      supabase.from("profiles").select("id,full_name,contract_type,cnpj,legal_name,pix_key_type,pix_key,bank_name").eq("contract_type", "pj"),
+      supabase.from("profiles").select("id,full_name,contract_type").eq("contract_type", "pj"),
       // Pagamentos referentes ao mês: due_date no mês OU (sem due_date e criado no mês)
       supabase.from("payments").select("*").or(
         `and(due_date.gte.${startDate},due_date.lt.${endDate}),and(due_date.is.null,created_at.gte.${startISO},created_at.lt.${endISO})`
@@ -658,9 +660,12 @@ function AdminView() {
       allPayments = Array.from(byId.values());
     }
     const { data: emailRows } = await supabase.rpc("get_profile_emails");
+    const { data: billingRows } = await supabase.rpc("get_billing_profiles");
     const emailMap = new Map((emailRows ?? []).map((row) => [row.id, row.email]));
-    setPjs(((pjRes.data ?? []) as Omit<PJProfile, "email">[]).map((p) => ({
+    const billingMap = new Map((billingRows ?? []).map((row) => [row.id, row]));
+    setPjs(((pjRes.data ?? []) as { id: string; full_name: string | null; contract_type: string | null }[]).map((p) => ({
       ...p,
+      ...(billingMap.get(p.id) ?? {}),
       email: emailMap.get(p.id) ?? "",
     })) as PJProfile[]);
     setPayments(allPayments);

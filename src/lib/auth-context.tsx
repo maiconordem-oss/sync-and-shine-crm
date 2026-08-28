@@ -49,11 +49,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   const loadProfileAndRoles = React.useCallback(async (uid: string) => {
-    const [{ data: prof }, { data: roleRows }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+    const [{ data: prof }, { data: roleRows }, { data: emailRows }, { data: billingRows }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id,full_name,avatar_url,job_title,contract_type,sound_enabled")
+        .eq("id", uid)
+        .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
+      supabase.rpc("get_profile_emails"),
+      supabase.rpc("get_billing_profiles"),
     ]);
-    setProfile((prof as Profile) ?? null);
+    const billing = (billingRows ?? []).find((b) => b.id === uid);
+    setProfile(
+      prof
+        ? ({
+            ...prof,
+            email: (emailRows ?? []).find((e) => e.id === uid)?.email ?? null,
+            cnpj: billing?.cnpj ?? null,
+            legal_name: billing?.legal_name ?? null,
+            pix_key_type: billing?.pix_key_type ?? null,
+            pix_key: billing?.pix_key ?? null,
+            bank_name: billing?.bank_name ?? null,
+          } as Profile)
+        : null,
+    );
     setRoles(((roleRows ?? []) as { role: AppRole }[]).map((r) => r.role));
   }, []);
 
