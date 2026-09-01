@@ -233,16 +233,22 @@ function PJView({ userId }: { userId: string }) {
       return;
     }
     const uploadedAt = new Date().toISOString();
-    const { error: updateError } = await supabase.from("monthly_closures").update({
+    const { data: updated, error: updateError } = await supabase.from("monthly_closures").update({
       invoice_path: path,
       invoice_name: file.name,
       invoice_uploaded_at: uploadedAt,
-    }).eq("id", closure.id);
+    }).eq("id", closure.id).select("id");
     if (updateError) {
       toast.error(updateError.message);
       setUploadingInvoice(false);
       return;
     }
+    if (!updated || updated.length === 0) {
+      toast.error("Não foi possível registrar a nota fiscal neste fechamento. Avise o Admin.");
+      setUploadingInvoice(false);
+      return;
+    }
+
     setClosures((current) => current.map((item) => item.id === closure.id
       ? { ...item, invoice_path: path, invoice_name: file.name, invoice_uploaded_at: uploadedAt }
       : item));
