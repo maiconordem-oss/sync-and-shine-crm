@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.guard_pj_invoice_update() FROM PUBLIC, anon, authenticated;
