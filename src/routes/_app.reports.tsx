@@ -1191,6 +1191,11 @@ function PJRow({
             )}
 
             <div className="flex flex-wrap gap-2">
+              {!row.pj.pix_key && row.totalToPay > 0 && (
+                <span className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-1.5 text-xs text-amber-800">
+                  PIX não cadastrado — peça ao PJ para preencher os dados de recebimento no perfil.
+                </span>
+              )}
               {row.pj.pix_key && row.totalToPay > 0 && (
                 <Dialog open={pixOpen} onOpenChange={setPixOpen}>
                   <Button size="sm" variant="outline" className="text-xs" onClick={() => setPixOpen(true)}><Wallet className="h-3.5 w-3.5 mr-1" /> PIX</Button>
