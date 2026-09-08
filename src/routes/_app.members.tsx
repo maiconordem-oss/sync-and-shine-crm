@@ -8,6 +8,8 @@ import { useAuth } from "@/lib/auth-context";
 import { initials } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/labels";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { KeyRound } from "lucide-react";
 
 export const Route = createFileRoute("/_app/members")({
   component: MembersPage,
@@ -20,6 +22,7 @@ function MembersPage() {
   const { isAdmin } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Record<string, Role>>({});
+  const [sending, setSending] = useState<string | null>(null);
 
   const load = async () => {
     const [m, r, e] = await Promise.all([
