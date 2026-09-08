@@ -40,7 +40,7 @@ function AuthPage() {
     if (!email) { toast.error("Digite seu e-mail primeiro."); return; }
     setBusy(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/auth",
+      redirectTo: window.location.origin + "/reset-password",
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -148,8 +148,11 @@ function AuthPage() {
                 {forgotMode ? (
                   <div className="space-y-3">
                     {resetSent ? (
-                      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 text-center">
-                        ✅ E-mail enviado! Verifique sua caixa de entrada e clique no link para redefinir a senha.
+                      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 text-center space-y-1">
+                        <div>✅ E-mail enviado! Clique no link para criar uma nova senha.</div>
+                        <div className="text-xs text-emerald-700/80">
+                          Não achou? Confira a caixa de spam. O link vale por tempo limitado — se vencer, é só pedir outro aqui.
+                        </div>
                       </div>
                     ) : (
                       <button
