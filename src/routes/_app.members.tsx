@@ -8,6 +8,8 @@ import { useAuth } from "@/lib/auth-context";
 import { initials } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/labels";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { KeyRound } from "lucide-react";
 
 export const Route = createFileRoute("/_app/members")({
   component: MembersPage,
@@ -20,6 +22,7 @@ function MembersPage() {
   const { isAdmin } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [roles, setRoles] = useState<Record<string, Role>>({});
+  const [sending, setSending] = useState<string | null>(null);
 
   const load = async () => {
     const [m, r, e] = await Promise.all([
@@ -55,6 +58,17 @@ function MembersPage() {
     void load();
   };
 
+  const sendResetLink = async (email: string | null) => {
+    if (!isAdmin || !email) { toast.error("Este usuário não tem e-mail cadastrado."); return; }
+    setSending(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/reset-password",
+    });
+    setSending(null);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Link de redefinição enviado para ${email}.`);
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -72,6 +86,7 @@ function MembersPage() {
                 <th className="p-3 font-medium">Cargo</th>
                 <th className="p-3 font-medium">Contrato</th>
                 <th className="p-3 font-medium">Papel</th>
+                {isAdmin && <th className="p-3 font-medium">Senha</th>}
               </tr>
             </thead>
             <tbody>
@@ -110,6 +125,20 @@ function MembersPage() {
                       <span>{ROLE_LABEL[roles[m.id] ?? "member"]}</span>
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="p-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        disabled={sending === m.email}
+                        onClick={() => void sendResetLink(m.email)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5 mr-1.5" />
+                        {sending === m.email ? "Enviando..." : "Enviar link de redefinição"}
+                      </Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
