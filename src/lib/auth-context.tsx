@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [roles, setRoles] = React.useState<AppRole[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const authEventVersion = React.useRef(0);
 
   const loadProfileAndRoles = React.useCallback(async (uid: string) => {
     const [{ data: prof }, { data: roleRows }, { data: emailRows }, { data: billingRows }] = await Promise.all([
@@ -77,13 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
+    let active = true;
+
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (!active) return;
+      authEventVersion.current += 1;
       setSession(sess);
       setUser(sess?.user ?? null);
+      setLoading(false);
       if (sess?.user) {
         // defer to avoid recursion
         setTimeout(() => {
-          void loadProfileAndRoles(sess.user.id);
+          if (active) void loadProfileAndRoles(sess.user.id);
         }, 0);
       } else {
         setProfile(null);
@@ -91,7 +97,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const versionBeforeInitialCheck = authEventVersion.current;
     void supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      if (!active || authEventVersion.current !== versionBeforeInitialCheck) return;
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
@@ -99,15 +107,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setLoading(false);
       }
+    }).catch(() => {
+      if (active && authEventVersion.current === versionBeforeInitialCheck) {
+        setLoading(false);
+      }
     });
 
-    return () => subscription.subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
   }, [loadProfileAndRoles]);
 
   const signIn = React.useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
-  }, []);
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
+    if (!data.session || !data.user) {
+      setLoading(false);
+      return { error: "Não foi possível confirmar sua sessão. Tente entrar novamente." };
+    }
+
+    authEventVersion.current += 1;
+    setSession(data.session);
+    setUser(data.user);
+    setLoading(false);
+    void loadProfileAndRoles(data.user.id);
+    return { error: null };
+  }, [loadProfileAndRoles]);
 
   const signUp = React.useCallback(async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
@@ -122,7 +152,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = React.useCallback(async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (!error) {
+      authEventVersion.current += 1;
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setRoles([]);
+      setLoading(false);
+    }
   }, []);
 
   const refresh = React.useCallback(async () => {
