@@ -203,7 +203,17 @@ function TasksPage() {
     if (!isAuthenticated) return;
     setPageLoading(true);
     const [t, p, pr] = await Promise.all([
-      supabase.from("tasks").select("*").is("parent_task_id", null).order("position"),
+      (async () => {
+        const all: TaskRow[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from("tasks").select("*").is("parent_task_id", null)
+            .order("position").order("id").range(from, from + 999);
+          if (error) return { data: all, error };
+          all.push(...((data ?? []) as TaskRow[]));
+          if (!data || data.length < 1000) break;
+        }
+        return { data: all, error: null };
+      })(),
       supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name,color").eq("archived", false),
     ]);
