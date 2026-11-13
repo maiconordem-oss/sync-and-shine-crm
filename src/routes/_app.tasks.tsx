@@ -131,6 +131,7 @@ interface SubTask {
 
 function TasksPage() {
   const { user, profile, loading, isAuthenticated, isAdmin, isManagerOrAdmin, canCreateTasks, can } = useAuth();
+  const canSeeAll = isAdmin || (isManagerOrAdmin && can("tasks.view_all"));
   const { play: playSound } = useSound();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list" | "calendar">("kanban");
@@ -202,7 +203,17 @@ function TasksPage() {
     if (!isAuthenticated) return;
     setPageLoading(true);
     const [t, p, pr] = await Promise.all([
-      supabase.from("tasks").select("*").is("parent_task_id", null).order("position"),
+      (async () => {
+        const all: TaskRow[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from("tasks").select("*").is("parent_task_id", null)
+            .order("position").order("id").range(from, from + 999);
+          if (error) return { data: all, error };
+          all.push(...((data ?? []) as TaskRow[]));
+          if (!data || data.length < 1000) break;
+        }
+        return { data: all, error: null };
+      })(),
       supabase.from("profiles").select("id,full_name,contract_type"),
       supabase.from("projects").select("id,name,color").eq("archived", false),
     ]);
@@ -243,7 +254,7 @@ function TasksPage() {
       if (filterProject !== "all" && t.project_id !== filterProject) return false;
       // Somente admin enxerga tarefas de todos; gestor e membro veem sempre
       // apenas as tarefas que criaram ou das quais são responsáveis.
-      const effAssignee = isAdmin ? filterAssignee : "mine";
+      const effAssignee = canSeeAll ? filterAssignee : "mine";
       if (effAssignee === "mine") {
         if (t.assignee_id !== user?.id && t.created_by !== user?.id) return false;
       } else if (effAssignee !== "all" && t.assignee_id !== effAssignee) return false;
@@ -272,7 +283,7 @@ function TasksPage() {
 
       return true;
     });
-  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo, user?.id, isAdmin]);
+  }, [tasks, search, filterProject, filterAssignee, filterPriority, filterStatus, filterType, filterDue, filterTags, createdFrom, createdTo, user?.id, canSeeAll]);
 
   const profileById = (id: string | null) => profiles.find((p) => p.id === id);
   const projectById = (id: string | null) => projects.find((p) => p.id === id);
@@ -281,7 +292,7 @@ function TasksPage() {
   const overdueCount = filtered.filter((t) => isOverdue(t.due_date) && t.status !== "done").length;
   const inProgressCount = filtered.filter((t) => t.status === "in_progress").length;
   const hasActiveFilter =
-    filterProject !== "all" || (isAdmin && filterAssignee !== "all") || filterPriority !== "all" ||
+    filterProject !== "all" || (canSeeAll && filterAssignee !== "all") || filterPriority !== "all" ||
     filterStatus !== "all" || filterType !== "all" || filterDue !== "all" ||
     filterTags.length > 0 || !!createdFrom || !!createdTo;
 
@@ -453,7 +464,7 @@ function TasksPage() {
               {projects.map((p) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          {isAdmin && (
+          {canSeeAll && (
             <Select value={filterAssignee} onValueChange={setFilterAssignee}>
               <SelectTrigger className="w-[170px] h-8 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
               <SelectContent>
@@ -519,7 +530,7 @@ function TasksPage() {
         <div className="flex flex-wrap gap-1.5 items-center text-xs">
           {filterStatus !== "all" && <FilterChip label={`Status: ${STATUS_LABEL[filterStatus] ?? filterStatus}`} onRemove={() => setFilterStatus("all")} />}
           {filterProject !== "all" && <FilterChip label={`Projeto: ${projectById(filterProject)?.name ?? "—"}`} onRemove={() => setFilterProject("all")} />}
-          {isAdmin && filterAssignee !== "all" && <FilterChip label={filterAssignee === "mine" ? "Minhas tarefas" : `Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
+          {canSeeAll && filterAssignee !== "all" && <FilterChip label={filterAssignee === "mine" ? "Minhas tarefas" : `Resp.: ${profileById(filterAssignee)?.full_name ?? "—"}`} onRemove={() => setFilterAssignee("all")} />}
           {filterPriority !== "all" && <FilterChip label={`Prioridade: ${PRIORITY_LABEL[filterPriority] ?? filterPriority}`} onRemove={() => setFilterPriority("all")} />}
           {filterType !== "all" && <FilterChip label={typeLabel(filterType)} onRemove={() => setFilterType("all")} />}
           {filterDue !== "all" && <FilterChip label={dueLabel(filterDue)} onRemove={() => setFilterDue("all")} />}
